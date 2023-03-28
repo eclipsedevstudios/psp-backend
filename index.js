@@ -23,7 +23,7 @@ app.use(express.urlencoded({ extended: true }));
 const port = 8080;
 
 app.use((req, res, next) => {
-  // TODO: Set other allowed origins here
+  // Note: Set other allowed origins here
   const allowedOrigins = ['http://localhost:3000', 'http://psp-backend.fly.dev/'];
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
@@ -401,8 +401,6 @@ app.post('/generate_report', (req, res) => {
 
   const MINDSET_SURVEY_ID = 'SV_5zNrXkf1Z4ozvRs';
   if (surveyId === MINDSET_SURVEY_ID) {
-    // TODO: Pass in the correct recordedDate
-    // TODO: Pass in the correct level
     // TODO: Change recipient email (i.e. the final launch step). Only do this once Qualtrics email has been disabled
 
     getQualtricsResponse(surveyId, responseId)
