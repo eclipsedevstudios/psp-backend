@@ -403,6 +403,8 @@ const emailReport = async (athleteName, providerName, reportUrl, email) => {
     "McKenzie Bromback": "mbromback@premiersportpsychology.com",
     "Eiron Sanchez": "esanchez@premiersportpsychology.com",
     "Luis Torres": "ltorres@premiersportpsychology.com",
+    "Dr. Harlan Austin": "haustin@premiersportpsychology.com",
+    "Dr. Lauren Zimmerman": "lzimmerman@premiersportpsychology.com",
   }
 
   if (providerName) {
