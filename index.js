@@ -107,6 +107,12 @@ const getQualtricsResponse = async (surveyId, responseId) => {
       const selfReflectionPercentileCollege = data.SRColComparison;
       const selfReflectionPercentilePro = data.SRProComparison;
 
+      const growthMindsetScore = data.GrowthScore;
+      const mentalSkillsScore = data.MentalSkills;
+      const teamSupportScore = data.Team;
+      const healthHabitsScore = data.HealthHabits;
+      const selfReflectionScore = data.SelfReflection;
+
       // const slackMessage = `*New Qualtrics response fetched:*\n\nSurvey ID: ${surveyId}\nResponse ID: ${responseId}\nLevel: ${level}\n\nGrowth Mindset Percentile: ${growthMindsetPercentile}\nMental Skills Percentile: ${mentalSkillsPercentile}\nTeam Support Percentile: ${teamSupportPercentile}\nHealth Habits Percentile: ${healthHabitsPercentile}\nSelf Reflection Percentile: ${selfReflectionPercentile}\n`;
       // postToSlack(slackMessage);
 
@@ -131,6 +137,11 @@ const getQualtricsResponse = async (surveyId, responseId) => {
         selfReflectionPercentile,
         selfReflectionPercentileCollege,
         selfReflectionPercentilePro,
+        growthMindsetScore,
+        mentalSkillsScore,
+        teamSupportScore,
+        healthHabitsScore,
+        selfReflectionScore,
       }
 
       console.log('Successfully fetched Qualtrics data - returning:');
@@ -635,6 +646,11 @@ app.post('/generate_report', (req, res) => {
         selfReflectionPercentile,
         selfReflectionPercentileCollege,
         selfReflectionPercentilePro,
+        growthMindsetScore,
+        mentalSkillsScore,
+        teamSupportScore,
+        healthHabitsScore,
+        selfReflectionScore,
       } = qualtricsData;
   
       const urlParams = {
@@ -657,6 +673,11 @@ app.post('/generate_report', (req, res) => {
         selfReflectionPercentile: selfReflectionPercentile.replace('%', ''),
         selfReflectionPercentileCollege: selfReflectionPercentileCollege.replace('%', ''),
         selfReflectionPercentilePro: selfReflectionPercentilePro.replace('%', ''),
+        growthMindsetScore,
+        mentalSkillsScore,
+        teamSupportScore,
+        healthHabitsScore,
+        selfReflectionScore,
       }
       const url = 'https://psp-backend.fly.dev/?' + querystring.stringify(urlParams);
   
