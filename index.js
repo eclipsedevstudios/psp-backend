@@ -15,6 +15,7 @@ const { WebClient } = require('@slack/web-api');
 const querystring = require('querystring');
 
 const app = express();
+const QUALTRICS_SPANISH_LANGUAGE_CODE = "ES-ES";
 
 // Qualtrics sends POST of x-www-form-urlencoded data
 app.use(express.urlencoded({ extended: true }));
@@ -86,6 +87,7 @@ const getQualtricsResponse = async (surveyId, responseId) => {
       const recordedDate = data.recordedDate;
       const level = data.Level;
       const providerName = res.data.result.labels?.QID11;
+      const language = data.Q_Language;
 
       const growthMindsetPercentile = data.GP;
       const growthMindsetPercentileCollege = data.GMColComparison;
@@ -122,6 +124,7 @@ const getQualtricsResponse = async (surveyId, responseId) => {
         recordedDate,
         level,
         providerName,
+        language,
         growthMindsetPercentile,
         growthMindsetPercentileCollege,
         growthMindsetPercentilePro,
@@ -209,12 +212,197 @@ const uploadToS3 = async (responseId) => {
   return url;
 };
 
-const emailReport = async (athleteName, providerName, reportUrl, email) => {
-  const data = {
-    from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
-    to: email,
-    subject: "Your Mindset Assessment Results from Premier Sport Psychology",
-    html: `
+const emailReport = async (athleteName, providerName, reportUrl, email, language) => {
+  let data = {};
+
+  if (language === QUALTRICS_SPANISH_LANGUAGE_CODE) {
+    data = {
+      from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
+      to: email,
+      subject: "Los resultados de su evaluación de mentalidad de Premier Sport Psychology",
+      html: `
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>Los resultados de su evaluación de mentalidad de Premier Sport Psychology</title>
+    <style>
+      @media only screen and (max-width: 620px) {
+        table.body h1 {
+          font-size: 28px !important;
+          margin-bottom: 10px !important;
+        }
+
+        table.body p,
+        table.body ul,
+        table.body ol,
+        table.body td,
+        table.body span,
+        table.body a {
+          font-size: 16px !important;
+        }
+
+        table.body .wrapper,
+        table.body .article {
+          padding: 10px !important;
+        }
+
+        table.body .content {
+          padding: 0 !important;
+        }
+
+        table.body .container {
+          padding: 0 !important;
+          width: 100% !important;
+        }
+
+        table.body .main {
+          border-left-width: 0 !important;
+          border-radius: 0 !important;
+          border-right-width: 0 !important;
+        }
+
+        table.body .btn table {
+          width: 100% !important;
+        }
+
+        table.body .btn a {
+          width: 100% !important;
+        }
+
+        table.body .img-responsive {
+          height: auto !important;
+          max-width: 100% !important;
+          width: auto !important;
+        }
+      }
+
+      @media all {
+        .ExternalClass {
+          width: 100%;
+        }
+
+        .ExternalClass,
+        .ExternalClass p,
+        .ExternalClass span,
+        .ExternalClass font,
+        .ExternalClass td,
+        .ExternalClass div {
+            line-height: 100%;
+          }
+
+        .apple-link a {
+          color: inherit !important;
+          font-family: inherit !important;
+          font-size: inherit !important;
+          font-weight: inherit !important;
+          line-height: inherit !important;
+          text-decoration: none !important;
+        }
+
+        #MessageViewBody a {
+          color: inherit;
+          text-decoration: none;
+          font-size: inherit;
+          font-family: inherit;
+          font-weight: inherit;
+          line-height: inherit;
+        }
+
+        .btn-primary table td:hover {
+          background-color: #34495e !important;
+        }
+
+        .btn-primary a:hover {
+          background-color: #34495e !important;
+          border-color: #34495e !important;
+        }
+      }
+    </style>
+  </head>
+  <body style="background-color: #f6f6f6; font-family: sans-serif; -webkit-font-smoothing: antialiased; font-size: 14px; line-height: 1.4; margin: 0; padding: 0; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;">
+    <span class="preheader" style="color: transparent; display: none; height: 0; max-height: 0; max-width: 0; opacity: 0; overflow: hidden; mso-hide: all; visibility: hidden; width: 0;">Your Mindset Assessment Results from Premier Sport Psychology</span>
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="body" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background-color: #f6f6f6; width: 100%;" width="100%" bgcolor="#f6f6f6">
+      <tr>
+        <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">&nbsp;</td>
+        <td class="container" style="font-family: sans-serif; font-size: 14px; vertical-align: top; display: block; max-width: 580px; padding: 10px; width: 580px; margin: 0 auto;" width="580" valign="top">
+          <div class="content" style="box-sizing: border-box; display: block; margin: 0 auto; max-width: 580px; padding: 10px;">
+
+            <!-- START CENTERED WHITE CONTAINER -->
+            <table role="presentation" class="main" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background: #ffffff; border-radius: 3px; width: 100%;" width="100%">
+
+              <!-- START MAIN CONTENT AREA -->
+              <tr>
+                <td class="wrapper" style="font-family: sans-serif; font-size: 14px; vertical-align: top; box-sizing: border-box; padding: 20px;" valign="top">
+                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%;" width="100%">
+                    <tr>
+                      <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">
+                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Hola ${athleteName},</p>
+                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">
+                          Gracias por completar la Evaluación de mentalidad de Premier Sport Psychology. Esta evaluación está diseñada para evaluar sus comportamientos, pensamientos y sentimientos relacionados con su bienestar y desempeño como atleta. También es un paso importante en el camino hacia un mejor rendimiento mental.
+                        </p>
+                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">
+                          Descargue su informe a continuación para ver sus puntuaciones y compararlas con las de otros atletas de su nivel. Le recomendamos que comparta estos resultados con sus entrenadores, proveedor de psicología deportiva u otras personas en su vida que están trabajando para apoyar su éxito.
+                        </p>
+                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; box-sizing: border-box; width: 100%;" width="100%">
+                          <tbody>
+                            <tr>
+                              <td align="left" style="font-family: sans-serif; font-size: 14px; vertical-align: top; padding-bottom: 15px;" valign="top">
+                                <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: auto;">
+                                  <tbody>
+                                    <tr>
+                                      <td style="font-family: sans-serif; font-size: 14px; vertical-align: top; border-radius: 5px; text-align: center; background-color: #3498db;" valign="top" align="center" bgcolor="#3498db"> <a href="${reportUrl}" target="_blank" style="border: solid 1px #3498db; border-radius: 5px; box-sizing: border-box; cursor: pointer; display: inline-block; font-size: 14px; font-weight: bold; margin: 0; padding: 12px 25px; text-decoration: none; text-transform: capitalize; background-color: #3498db; border-color: #3498db; color: #ffffff;">Descargue su informe</a> </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">
+                          ¿Estás interesado en aprender más sobre la mentalidad del deportista y la psicología del deporte? ¡Contamos con un equipo dedicado de profesionales listos para ayudar! <a href='https://premiersportpsychology.com/'>Nuestra web</a> incluye recursos e información sobre psicología del deporte, así como un enlace para <a href='https://premiersportpsychology.com/request-appointment/'>solicitar cita previa</a>. ¡Menciona que tomaste la Evaluación de Mentalidad con $20 de descuento en tu primera sesión!
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+            <!-- END MAIN CONTENT AREA -->
+            </table>
+            <!-- END CENTERED WHITE CONTAINER -->
+
+            <!-- START FOOTER -->
+            <div class="footer" style="clear: both; margin-top: 10px; text-align: center; width: 100%;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%;" width="100%">
+                <tr>
+                  <td class="content-block" style="font-family: sans-serif; vertical-align: top; padding-bottom: 10px; padding-top: 10px; color: #999999; font-size: 12px; text-align: center;" valign="top" align="center">
+                    <span class="apple-link" style="color: #999999; font-size: 12px; text-align: center;">Premier Sport Psychology, 7401 Metro Blvd Suite 51010, Edina, MN 55439</span>
+                  </td>
+                </tr>
+              </table>
+            </div>
+            <!-- END FOOTER -->
+
+          </div>
+        </td>
+        <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">&nbsp;</td>
+      </tr>
+    </table>
+  </body>
+</html>
+      `,
+      text: `Hola {athleteName},\n\nGracias por completar la Evaluación de mentalidad de Premier Sport Psychology. Esta evaluación está diseñada para evaluar sus comportamientos, pensamientos y sentimientos relacionados con su bienestar y desempeño como atleta. También es un paso importante en el camino hacia un mejor rendimiento mental.
+      \n\nDescargue su informe a continuación para ver sus puntuaciones y compararlas con las de otros atletas de su nivel. Le recomendamos que comparta estos resultados con sus entrenadores, proveedor de psicología deportiva u otras personas en su vida que están trabajando para apoyar su éxito.
+      \n\nDescargue su informe: ${reportUrl}\n\n¿Estás interesado en aprender más sobre la mentalidad del deportista y la psicología del deporte? ¡Contamos con un equipo dedicado de profesionales listos para ayudar! Nuestra web (https://premiersportpsychology.com/) incluye recursos e información sobre psicología del deporte, así como un enlace para solicitar cita previa (https://premiersportpsychology.com/request-appointment/). ¡Menciona que tomaste la Evaluación de Mentalidad con $20 de descuento en tu primera sesión!`,
+    };
+  } else {
+    data = {
+      from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
+      to: email,
+      subject: "Your Mindset Assessment Results from Premier Sport Psychology",
+      html: `
 <!doctype html>
 <html>
   <head>
@@ -383,9 +571,10 @@ const emailReport = async (athleteName, providerName, reportUrl, email) => {
     </table>
   </body>
 </html>
-    `,
-    text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology’s Mindset Assessment. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.\n\nPlease download your report below to view your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about the athlete mindset and sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment. Mention that you took the Mindset Assessment for $20 off your first session!`,
-  };
+      `,
+      text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology’s Mindset Assessment. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.\n\nPlease download your report below to view your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about the athlete mindset and sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/). Mention that you took the Mindset Assessment for $20 off your first session!`,
+    };
+  }
 
   mailgun.messages().send(data, function(error, body) {
     if (error) {
@@ -631,6 +820,7 @@ app.post('/generate_report', (req, res) => {
         recordedDate,
         level,
         providerName,
+        language,
         growthMindsetPercentile,
         growthMindsetPercentileCollege,
         growthMindsetPercentilePro,
@@ -658,6 +848,7 @@ app.post('/generate_report', (req, res) => {
         athleteName,
         recordedDate,
         level,
+        language: language === QUALTRICS_SPANISH_LANGUAGE_CODE ? 'es' : 'en',
         growthMindsetPercentile: growthMindsetPercentile.replace('%', ''),
         growthMindsetPercentileCollege: growthMindsetPercentileCollege.replace('%', ''),
         growthMindsetPercentilePro: growthMindsetPercentilePro.replace('%', ''),
@@ -686,15 +877,15 @@ app.post('/generate_report', (req, res) => {
         uploadToS3(responseId)
         .then(reportUrl => {
           console.log(`Successful upload to S3! Presigned URL: ${reportUrl}`);
-          emailReport(athleteName, providerName, reportUrl, email)
+          emailReport(athleteName, providerName, reportUrl, email, language)
           .then(() => {
             console.log('All steps completed!');
-            const slackMessage = `*Email with report delivered:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nReport URL: ${reportUrl}`;
+            const slackMessage = `*Email with report delivered:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
             postToSlack(slackMessage);
           })
           .catch(error => {
             console.error(error);
-            const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nReport URL: ${reportUrl}`;
+            const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
             postToSlack(slackMessage);
           })
         })
