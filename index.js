@@ -1088,7 +1088,7 @@ app.post('/generate_report', (req, res) => {
           emailReport(surveyId, athleteName, providerName, reportUrl, email, language)
           .then(() => {
             console.log('All steps completed!');
-            const slackMessage = `*Email with report delivered:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            const slackMessage = `*Email with report delivered (Adult Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
             postToSlack(slackMessage);
           })
           .catch(error => {
@@ -1173,17 +1173,17 @@ app.post('/generate_report_youth_mindset', (req, res) => {
         uploadToS3(surveyId, responseId)
         .then(reportUrl => {
           console.log(`Successful upload to S3! Presigned URL: ${reportUrl}`);
-          // emailReport(surveyId, athleteName, providerName, reportUrl, email, language)
-          // .then(() => {
-          //   console.log('All steps completed!');
-          //   const slackMessage = `*Email with report delivered:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
-          //   postToSlack(slackMessage);
-          // })
-          // .catch(error => {
-          //   console.error(error);
-          //   const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
-          //   postToSlack(slackMessage);
-          // })
+          emailReport(surveyId, athleteName, providerName, reportUrl, email, language)
+          .then(() => {
+            console.log('All steps completed!');
+            const slackMessage = `*Email with report delivered (Youth Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            postToSlack(slackMessage);
+          })
+          .catch(error => {
+            console.error(error);
+            const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            postToSlack(slackMessage);
+          })
         })
         .catch(error => {
           console.error(error);
