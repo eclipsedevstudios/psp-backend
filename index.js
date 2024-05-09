@@ -18,6 +18,7 @@ const app = express();
 const QUALTRICS_SPANISH_LANGUAGE_CODE = "ES-ES";
 const QUALTRICS_ADULT_MINDSET_SURVEY_ID = 'SV_5zNrXkf1Z4ozvRs';
 const QUALTRICS_YOUTH_MINDSET_SURVEY_ID = 'SV_afqUZdlh3nKp3wi';
+const QUALTRICS_HOCKEY_CODE = "Hockey";
 
 // Qualtrics sends POST of x-www-form-urlencoded data
 app.use(express.urlencoded({ extended: true }));
@@ -143,8 +144,9 @@ const getQualtricsResponse = async (surveyId, responseId) => {
       const athleteName = data.QID7_TEXT;
       const email = data.QID8_TEXT;
       const recordedDate = data.recordedDate;
-      const age = res.data.result.labels?.QID19;
-      const providerName = res.data.result.labels?.QID22;
+      const age = data['Age'];
+      const providerName = data['provider_name'];
+      const sports = res.data.result.labels?.QID12;
 
       const growthMindsetPercentile = data['GM Percentile'];
       const selfConfidencePercentile = data['SC Percentile'];
@@ -169,6 +171,7 @@ const getQualtricsResponse = async (surveyId, responseId) => {
         selfConfidenceScore,
         teamCultureScore,
         healthBehaviorsScore,
+        sports,
       }
 
       console.log('Successfully fetched Qualtrics data - returning:');
@@ -604,10 +607,9 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
       text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology’s Mindset Assessment. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.\n\nPlease download your report below to view your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about the athlete mindset and sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/). Mention that you took the Mindset Assessment for $20 off your first session!`,
     };
   } else if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID) {
-    // TODO: Update `to` to `email`
     data = {
       from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
-      to: "roobeelee@gmail.com,mbromback@premiersportpsychology.com,jkaufman@premiersportpsychology.com",
+      to: email,
       subject: "Your Youth Mindset Assessment Results from Premier Sport Psychology",
       html: `
 <!doctype html>
@@ -816,191 +818,189 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
     "Dr. Lauren Zimmerman": "lzimmerman@premiersportpsychology.com",
   }
 
-  if (providerName) {
-    if (providerName in providerNameToEmailMap) {
-      const providerEmail = providerNameToEmailMap[providerName];
+  if (providerName && providerName in providerNameToEmailMap) {
+    const providerEmail = providerNameToEmailMap[providerName];
 
-      const dataProviderEmail = {
-        from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
-        to: providerEmail,
-        subject: `Mindset Assessment Result for ${athleteName}`,
-        html: `
+    const dataProviderEmail = {
+      from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
+      to: providerEmail,
+      subject: `Mindset Assessment Result for ${athleteName}`,
+      html: `
 <!doctype html>
 <html>
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <title>Mindset Assessment Result for ${athleteName}</title>
-    <style>
-      @media only screen and (max-width: 620px) {
-        table.body h1 {
-          font-size: 28px !important;
-          margin-bottom: 10px !important;
-        }
-
-        table.body p,
-        table.body ul,
-        table.body ol,
-        table.body td,
-        table.body span,
-        table.body a {
-          font-size: 16px !important;
-        }
-
-        table.body .wrapper,
-        table.body .article {
-          padding: 10px !important;
-        }
-
-        table.body .content {
-          padding: 0 !important;
-        }
-
-        table.body .container {
-          padding: 0 !important;
-          width: 100% !important;
-        }
-
-        table.body .main {
-          border-left-width: 0 !important;
-          border-radius: 0 !important;
-          border-right-width: 0 !important;
-        }
-
-        table.body .btn table {
-          width: 100% !important;
-        }
-
-        table.body .btn a {
-          width: 100% !important;
-        }
-
-        table.body .img-responsive {
-          height: auto !important;
-          max-width: 100% !important;
-          width: auto !important;
-        }
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>Mindset Assessment Result for ${athleteName}</title>
+  <style>
+    @media only screen and (max-width: 620px) {
+      table.body h1 {
+        font-size: 28px !important;
+        margin-bottom: 10px !important;
       }
 
-      @media all {
-        .ExternalClass {
-          width: 100%;
-        }
-
-        .ExternalClass,
-        .ExternalClass p,
-        .ExternalClass span,
-        .ExternalClass font,
-        .ExternalClass td,
-        .ExternalClass div {
-            line-height: 100%;
-          }
-
-        .apple-link a {
-          color: inherit !important;
-          font-family: inherit !important;
-          font-size: inherit !important;
-          font-weight: inherit !important;
-          line-height: inherit !important;
-          text-decoration: none !important;
-        }
-
-        #MessageViewBody a {
-          color: inherit;
-          text-decoration: none;
-          font-size: inherit;
-          font-family: inherit;
-          font-weight: inherit;
-          line-height: inherit;
-        }
-
-        .btn-primary table td:hover {
-          background-color: #34495e !important;
-        }
-
-        .btn-primary a:hover {
-          background-color: #34495e !important;
-          border-color: #34495e !important;
-        }
+      table.body p,
+      table.body ul,
+      table.body ol,
+      table.body td,
+      table.body span,
+      table.body a {
+        font-size: 16px !important;
       }
-    </style>
-  </head>
-  <body style="background-color: #f6f6f6; font-family: sans-serif; -webkit-font-smoothing: antialiased; font-size: 14px; line-height: 1.4; margin: 0; padding: 0; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;">
-    <span class="preheader" style="color: transparent; display: none; height: 0; max-height: 0; max-width: 0; opacity: 0; overflow: hidden; mso-hide: all; visibility: hidden; width: 0;">Mindset Assessment Result for ${athleteName}</span>
-    <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="body" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background-color: #f6f6f6; width: 100%;" width="100%" bgcolor="#f6f6f6">
-      <tr>
-        <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">&nbsp;</td>
-        <td class="container" style="font-family: sans-serif; font-size: 14px; vertical-align: top; display: block; max-width: 580px; padding: 10px; width: 580px; margin: 0 auto;" width="580" valign="top">
-          <div class="content" style="box-sizing: border-box; display: block; margin: 0 auto; max-width: 580px; padding: 10px;">
 
-            <!-- START CENTERED WHITE CONTAINER -->
-            <table role="presentation" class="main" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background: #ffffff; border-radius: 3px; width: 100%;" width="100%">
+      table.body .wrapper,
+      table.body .article {
+        padding: 10px !important;
+      }
 
-              <!-- START MAIN CONTENT AREA -->
+      table.body .content {
+        padding: 0 !important;
+      }
+
+      table.body .container {
+        padding: 0 !important;
+        width: 100% !important;
+      }
+
+      table.body .main {
+        border-left-width: 0 !important;
+        border-radius: 0 !important;
+        border-right-width: 0 !important;
+      }
+
+      table.body .btn table {
+        width: 100% !important;
+      }
+
+      table.body .btn a {
+        width: 100% !important;
+      }
+
+      table.body .img-responsive {
+        height: auto !important;
+        max-width: 100% !important;
+        width: auto !important;
+      }
+    }
+
+    @media all {
+      .ExternalClass {
+        width: 100%;
+      }
+
+      .ExternalClass,
+      .ExternalClass p,
+      .ExternalClass span,
+      .ExternalClass font,
+      .ExternalClass td,
+      .ExternalClass div {
+          line-height: 100%;
+        }
+
+      .apple-link a {
+        color: inherit !important;
+        font-family: inherit !important;
+        font-size: inherit !important;
+        font-weight: inherit !important;
+        line-height: inherit !important;
+        text-decoration: none !important;
+      }
+
+      #MessageViewBody a {
+        color: inherit;
+        text-decoration: none;
+        font-size: inherit;
+        font-family: inherit;
+        font-weight: inherit;
+        line-height: inherit;
+      }
+
+      .btn-primary table td:hover {
+        background-color: #34495e !important;
+      }
+
+      .btn-primary a:hover {
+        background-color: #34495e !important;
+        border-color: #34495e !important;
+      }
+    }
+  </style>
+</head>
+<body style="background-color: #f6f6f6; font-family: sans-serif; -webkit-font-smoothing: antialiased; font-size: 14px; line-height: 1.4; margin: 0; padding: 0; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;">
+  <span class="preheader" style="color: transparent; display: none; height: 0; max-height: 0; max-width: 0; opacity: 0; overflow: hidden; mso-hide: all; visibility: hidden; width: 0;">Mindset Assessment Result for ${athleteName}</span>
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="body" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background-color: #f6f6f6; width: 100%;" width="100%" bgcolor="#f6f6f6">
+    <tr>
+      <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">&nbsp;</td>
+      <td class="container" style="font-family: sans-serif; font-size: 14px; vertical-align: top; display: block; max-width: 580px; padding: 10px; width: 580px; margin: 0 auto;" width="580" valign="top">
+        <div class="content" style="box-sizing: border-box; display: block; margin: 0 auto; max-width: 580px; padding: 10px;">
+
+          <!-- START CENTERED WHITE CONTAINER -->
+          <table role="presentation" class="main" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background: #ffffff; border-radius: 3px; width: 100%;" width="100%">
+
+            <!-- START MAIN CONTENT AREA -->
+            <tr>
+              <td class="wrapper" style="font-family: sans-serif; font-size: 14px; vertical-align: top; box-sizing: border-box; padding: 20px;" valign="top">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%;" width="100%">
+                  <tr>
+                    <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">
+                      <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Hi ${providerName},</p>
+                      <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Your athlete, ${athleteName}, recently completed a Mindset Assessment. You can download their report below.</p>
+                      <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; box-sizing: border-box; width: 100%;" width="100%">
+                        <tbody>
+                          <tr>
+                            <td align="left" style="font-family: sans-serif; font-size: 14px; vertical-align: top; padding-bottom: 15px;" valign="top">
+                              <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: auto;">
+                                <tbody>
+                                  <tr>
+                                    <td style="font-family: sans-serif; font-size: 14px; vertical-align: top; border-radius: 5px; text-align: center; background-color: #3498db;" valign="top" align="center" bgcolor="#3498db"> <a href="${reportUrl}" target="_blank" style="border: solid 1px #3498db; border-radius: 5px; box-sizing: border-box; cursor: pointer; display: inline-block; font-size: 14px; font-weight: bold; margin: 0; padding: 12px 25px; text-decoration: none; text-transform: capitalize; background-color: #3498db; border-color: #3498db; color: #ffffff;">Download report</a> </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+          <!-- END MAIN CONTENT AREA -->
+          </table>
+          <!-- END CENTERED WHITE CONTAINER -->
+
+          <!-- START FOOTER -->
+          <div class="footer" style="clear: both; margin-top: 10px; text-align: center; width: 100%;">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%;" width="100%">
               <tr>
-                <td class="wrapper" style="font-family: sans-serif; font-size: 14px; vertical-align: top; box-sizing: border-box; padding: 20px;" valign="top">
-                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%;" width="100%">
-                    <tr>
-                      <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">
-                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Hi ${providerName},</p>
-                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Your athlete, ${athleteName}, recently completed a Mindset Assessment. You can download their report below.</p>
-                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; box-sizing: border-box; width: 100%;" width="100%">
-                          <tbody>
-                            <tr>
-                              <td align="left" style="font-family: sans-serif; font-size: 14px; vertical-align: top; padding-bottom: 15px;" valign="top">
-                                <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: auto;">
-                                  <tbody>
-                                    <tr>
-                                      <td style="font-family: sans-serif; font-size: 14px; vertical-align: top; border-radius: 5px; text-align: center; background-color: #3498db;" valign="top" align="center" bgcolor="#3498db"> <a href="${reportUrl}" target="_blank" style="border: solid 1px #3498db; border-radius: 5px; box-sizing: border-box; cursor: pointer; display: inline-block; font-size: 14px; font-weight: bold; margin: 0; padding: 12px 25px; text-decoration: none; text-transform: capitalize; background-color: #3498db; border-color: #3498db; color: #ffffff;">Download report</a> </td>
-                                    </tr>
-                                  </tbody>
-                                </table>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
-                  </table>
+                <td class="content-block" style="font-family: sans-serif; vertical-align: top; padding-bottom: 10px; padding-top: 10px; color: #999999; font-size: 12px; text-align: center;" valign="top" align="center">
+                  <span class="apple-link" style="color: #999999; font-size: 12px; text-align: center;">Premier Sport Psychology, 7401 Metro Blvd Suite 51010, Edina, MN 55439</span>
                 </td>
               </tr>
-
-            <!-- END MAIN CONTENT AREA -->
             </table>
-            <!-- END CENTERED WHITE CONTAINER -->
-
-            <!-- START FOOTER -->
-            <div class="footer" style="clear: both; margin-top: 10px; text-align: center; width: 100%;">
-              <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%;" width="100%">
-                <tr>
-                  <td class="content-block" style="font-family: sans-serif; vertical-align: top; padding-bottom: 10px; padding-top: 10px; color: #999999; font-size: 12px; text-align: center;" valign="top" align="center">
-                    <span class="apple-link" style="color: #999999; font-size: 12px; text-align: center;">Premier Sport Psychology, 7401 Metro Blvd Suite 51010, Edina, MN 55439</span>
-                  </td>
-                </tr>
-              </table>
-            </div>
-            <!-- END FOOTER -->
-
           </div>
-        </td>
-        <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">&nbsp;</td>
-      </tr>
-    </table>
-  </body>
-</html>
-        `,
-        text: `Hi {providerName},\n\nYour athlete, ${athleteName}, recently completed a Mindset Assessment. You can download their report here: ${reportUrl}.`,
-      };
+          <!-- END FOOTER -->
 
-      mailgun.messages().send(dataProviderEmail, function(error, body) {
-        if (error) {
-          console.error(error);
-          throw Error(error);
-        } else {
-          console.log(body);
-        }
-      });
-    }
+        </div>
+      </td>
+      <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">&nbsp;</td>
+    </tr>
+  </table>
+</body>
+</html>
+      `,
+      text: `Hi {providerName},\n\nYour athlete, ${athleteName}, recently completed a Mindset Assessment. You can download their report here: ${reportUrl}.`,
+    };
+
+    mailgun.messages().send(dataProviderEmail, function(error, body) {
+      if (error) {
+        console.error(error);
+        throw Error(error);
+      } else {
+        console.log(body);
+      }
+    });
   }
 }
 
@@ -1134,7 +1134,6 @@ app.post('/generate_report_youth_mindset', (req, res) => {
   if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID) {
     getQualtricsResponse(surveyId, responseId)
     .then((qualtricsData) => {
-      
       const {
         athleteName,
         email,
@@ -1149,14 +1148,19 @@ app.post('/generate_report_youth_mindset', (req, res) => {
         selfConfidenceScore,
         teamCultureScore,
         healthBehaviorsScore,
+        sports,
       } = qualtricsData;
+
+      // TODO: Update this once language is dynamic
+      const language = 'en';
+      const isHockeyReport = sports && sports.includes(QUALTRICS_HOCKEY_CODE);
   
       const urlParams = {
         reportOnly: 'true',
         athleteName,
         recordedDate,
         age,
-        language: 'en',
+        language,
         growthMindsetPercentile: growthMindsetPercentile.replace('%', ''),
         selfConfidencePercentile: selfConfidencePercentile.replace('%', ''),
         teamCulturePercentile: teamCulturePercentile.replace('%', ''),
@@ -1165,6 +1169,7 @@ app.post('/generate_report_youth_mindset', (req, res) => {
         selfConfidenceScore,
         teamCultureScore,
         healthBehaviorsScore,
+        sport: isHockeyReport ? 'hockey' : '',
       }
       const url = 'https://psp-backend.fly.dev/youth/?' + querystring.stringify(urlParams);
   
@@ -1176,7 +1181,12 @@ app.post('/generate_report_youth_mindset', (req, res) => {
           emailReport(surveyId, athleteName, providerName, reportUrl, email, language)
           .then(() => {
             console.log('All steps completed!');
-            const slackMessage = `*Email with report delivered (Youth Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            let slackMessage = '';
+            if (isHockeyReport) {
+              slackMessage = `*Email with report delivered (Youth Mindset - Hockey):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            } else {
+              slackMessage = `*Email with report delivered (Youth Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            }
             postToSlack(slackMessage);
           })
           .catch(error => {
