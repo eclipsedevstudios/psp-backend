@@ -824,6 +824,7 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
     const dataProviderEmail = {
       from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
       to: providerEmail,
+      bcc: 'admin@premiersportpsychology.com',
       subject: `Mindset Assessment Result for ${athleteName}`,
       html: `
 <!doctype html>
