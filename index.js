@@ -811,11 +811,12 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
     "Dr. Janet Finlayson": "jfinlayson@premiersportpsychology.com",
     "Dr. Kirbi Kidd": "kkidd@premiersportpsychology.com",
     "Dr. Phil Imholte": "pimholte@premiersportpsychology.com",
-    "McKenzie Bromback": "mbromback@premiersportpsychology.com",
+    "Dr. McKenzie Bromback": "mbromback@premiersportpsychology.com",
     "Eiron Sanchez": "esanchez@premiersportpsychology.com",
     "Luis Torres": "ltorres@premiersportpsychology.com",
     "Dr. Harlan Austin": "haustin@premiersportpsychology.com",
     "Dr. Lauren Zimmerman": "lzimmerman@premiersportpsychology.com",
+    "Canon Pieper": "cpieper@premiersportpsychology.com",
   }
 
   if (providerName && providerName in providerNameToEmailMap) {
