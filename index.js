@@ -826,11 +826,9 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
       text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology’s Mindset Assessment for youth athletes. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.\n\nPlease use the link below to download your report. This report will show you your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about the athlete mindset and sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/). Mention that you took the Mindset Assessment for $20 off your first session!`,
     };
   } else if (surveyId === QUALTRICS_STAFF_MINDSET_SURVEY_ID) {
-    // TODO: Change list of recipients when we go live
     data = {
       from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
-      to: "roobeelee@gmail.com",
-      cc: "mbromback@premiersportpsychology.com;jkaufman@premiersportpsychology.com",
+      to: email,
       subject: "Your Mindset Assessment Results from Premier Sport Psychology",
       html: `
 <!doctype html>
@@ -951,9 +949,9 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
                     <tr>
                       <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">
                         <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Hi ${athleteName},</p>
-                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Thank you for completing Premier Sport Psychology’s Mindset Assessment for Sport Staff. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and development as someone who works in the sport industry. It is also an important step on the road to improved mental performance. Please see the link below to download your report. This report will show you your scores and how they compare to other sport staff at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.
+                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Thank you for completing Premier Sport Psychology’s Mindset Assessment for Sport Staff. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and development as someone who works in the sport industry. It is also an important step on the road to improved mental performance.
                         </p>
-                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Please download your report below to view your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.</p>
+                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Please download your report below to view your scores and how they compare to other sport staff at your level. We encourage you to share these results with your supervisors, sport psychology provider, or others in your life who are working to support your success.</p>
                         <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; box-sizing: border-box; width: 100%;" width="100%">
                           <tbody>
                             <tr>
@@ -1002,7 +1000,7 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
   </body>
 </html>
       `,
-      text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology’s Mindset Assessment for Sport Staff. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and development as someone who works in the sport industry. It is also an important step on the road to improved mental performance. Please see the link below to download your report. This report will show you your scores and how they compare to other sport staff at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/). Mention that you took the Mindset Assessment for $20 off your first session!`,
+      text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology’s Mindset Assessment for Sport Staff. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and development as someone who works in the sport industry. It is also an important step on the road to improved mental performance. Please see the link below to download your report. This report will show you your scores and how they compare to other sport staff at your level. We encourage you to share these results with your supervisors, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/). Mention that you took the Mindset Assessment for $20 off your first session!`,
     };
   }
 
