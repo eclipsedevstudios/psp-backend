@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const axios = require('axios');
 const bodyParser = require('body-parser');
 const express = require("express");
@@ -54,7 +56,20 @@ const postToSlack = async (message) => {
     });
     console.log('Slack message successfully posted!');
   } catch (error) {
-    console.error(error);
+    console.error('Error posting to Slack:', error);
+  }
+
+  // Every time we post to Slack, we also post to Teams
+  const TEAMS_WEBHOOK_URL = 'https://prod-56.westus.logic.azure.com/workflows/e919a09e961c4508bb371908b28f838f/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=oONbkzMAtDtUbh96DPmJ72mHXTcIN1o9Kj6hS-QrfCA'
+  try {
+    await axios.post(
+      TEAMS_WEBHOOK_URL,
+      { text: message },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+    console.log('Teams message successfully posted!');
+  } catch (error) {
+    console.error('Error posting to Teams:', error);
   }
 };
 
