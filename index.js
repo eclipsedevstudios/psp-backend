@@ -20,6 +20,7 @@ const app = express();
 const QUALTRICS_SPANISH_LANGUAGE_CODE = "ES-ES";
 const QUALTRICS_ADULT_MINDSET_SURVEY_ID = 'SV_5zNrXkf1Z4ozvRs';
 const QUALTRICS_YOUTH_MINDSET_SURVEY_ID = 'SV_afqUZdlh3nKp3wi';
+const QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID = 'SV_0q7oaLHkRcDjPp4';
 const QUALTRICS_STAFF_MINDSET_SURVEY_ID = 'SV_429WRg8lEN9jseW';
 const QUALTRICS_HOCKEY_CODE = "Hockey";
 
@@ -155,7 +156,7 @@ const getQualtricsResponse = async (surveyId, responseId) => {
       console.log(result)
 
       return result;
-    } else if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID) {
+    } else if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID || surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID) {
       const data = res.data.result.values;
       const athleteName = data.QID7_TEXT;
       const email = data.QID8_TEXT;
@@ -663,7 +664,7 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
       `,
       text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology’s Mindset Assessment. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.\n\nPlease download your report below to view your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about the athlete mindset and sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/). Mention that you took the Mindset Assessment for $20 off your first session!`,
     };
-  } else if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID) {
+  } else if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID || surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID) {
     data = {
       from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
       to: email,
@@ -1423,6 +1424,96 @@ app.post('/generate_report_youth_mindset', (req, res) => {
             } else {
               slackMessage = `*Email with report delivered (Youth Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
             }
+            postToSlack(slackMessage);
+          })
+          .catch(error => {
+            console.error(error);
+            const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            postToSlack(slackMessage);
+          })
+        })
+        .catch(error => {
+          console.error(error);
+          const slackMessage = `*Failed to upload to S3:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+          postToSlack(slackMessage);
+        });
+      })
+      .catch(error => {
+        console.error(error);
+        const slackMessage = `*Failed to generate report:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+        postToSlack(slackMessage);
+      })
+    })
+    .catch(error => {
+      console.error(error);
+      const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+      postToSlack(slackMessage);
+    })
+  }
+});
+
+app.post('/generate_report_youth_golf_mindset', (req, res) => {
+  console.log('Webhook listener received for Youth Mindset Golf Report - request body:')
+  console.log(req.body);
+
+  // Send a 200 status code to acknowledge receiving the webhook
+  res.status(200).end();
+
+  const surveyId = req.body['SurveyID'];
+  const responseId = req.body['ResponseID'];
+  const responseTimestamp = req.body['CompletedDate'];
+
+  const slackMessage = `*New Qualtrics response received (Youth Mindset Golf):*\n\nSurvey ID: ${surveyId}\nResponse ID: ${responseId}\nTimestamp: ${responseTimestamp}`;
+  postToSlack(slackMessage);
+
+  if (surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID) {
+    getQualtricsResponse(surveyId, responseId)
+    .then((qualtricsData) => {
+      const {
+        athleteName,
+        email,
+        recordedDate,
+        age,
+        providerName,
+        growthMindsetPercentile,
+        selfConfidencePercentile,
+        teamCulturePercentile,
+        healthBehaviorsPercentile,
+        growthMindsetScore,
+        selfConfidenceScore,
+        teamCultureScore,
+        healthBehaviorsScore,
+      } = qualtricsData;
+
+      // TODO: Update this once language is dynamic
+      const language = 'en';
+  
+      const urlParams = {
+        reportOnly: 'true',
+        athleteName,
+        recordedDate,
+        age,
+        language,
+        growthMindsetPercentile: growthMindsetPercentile.replace('%', ''),
+        selfConfidencePercentile: selfConfidencePercentile.replace('%', ''),
+        teamCulturePercentile: teamCulturePercentile.replace('%', ''),
+        healthBehaviorsPercentile: healthBehaviorsPercentile.replace('%', ''),
+        growthMindsetScore,
+        selfConfidenceScore,
+        teamCultureScore,
+        healthBehaviorsScore,
+      }
+      const url = 'https://psp-backend.fly.dev/youth-golf/?' + querystring.stringify(urlParams);
+  
+      generatePdfReport(url, responseId)
+      .then(() => {
+        uploadToS3(surveyId, responseId)
+        .then(reportUrl => {
+          console.log(`Successful upload to S3! Presigned URL: ${reportUrl}`);
+          emailReport(surveyId, athleteName, providerName, reportUrl, email, language)
+          .then(() => {
+            console.log('All steps completed!');
+            const slackMessage = `*Email with report delivered (Youth Mindset Golf):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
             postToSlack(slackMessage);
           })
           .catch(error => {
