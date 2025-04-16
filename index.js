@@ -277,6 +277,8 @@ const uploadToS3 = async (surveyId, responseId) => {
     BUCKET_NAME = 'psp-mindset-assessment-reports-youth';
   } else if (surveyId === QUALTRICS_STAFF_MINDSET_SURVEY_ID) {
     BUCKET_NAME = 'psp-mindset-assessment-reports-staff'
+  } else if (surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID) {
+    BUCKET_NAME = 'psp-mindset-assessment-reports-youth-golf';
   }
   const OBJECT_NAME = `psp-mindset-assessment-report-${responseId}.pdf`;
   const fileContent = fs.readFileSync(`output/psp-mindset-assessment-report-${responseId}.pdf`);
