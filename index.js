@@ -1,27 +1,31 @@
-require('dotenv').config();
+require("dotenv").config();
 
-const axios = require('axios');
-const bodyParser = require('body-parser');
+const axios = require("axios");
+const bodyParser = require("body-parser");
 const express = require("express");
-const fs = require('fs');
+const fs = require("fs");
 const request = require("request");
-const path = require('path');
-const { chromium } = require('playwright');
+const path = require("path");
+const { chromium } = require("playwright");
 const mailgun = require("mailgun-js")({
   apiKey: process.env.MAILGUN_API_KEY,
   domain: "mg.premiersportpsychology.com",
 });
-const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const { WebClient } = require('@slack/web-api');
-const querystring = require('querystring');
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const { WebClient } = require("@slack/web-api");
+const querystring = require("querystring");
 
 const app = express();
 const QUALTRICS_SPANISH_LANGUAGE_CODE = "ES-ES";
-const QUALTRICS_ADULT_MINDSET_SURVEY_ID = 'SV_5zNrXkf1Z4ozvRs';
-const QUALTRICS_YOUTH_MINDSET_SURVEY_ID = 'SV_afqUZdlh3nKp3wi';
-const QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID = 'SV_0q7oaLHkRcDjPp4';
-const QUALTRICS_STAFF_MINDSET_SURVEY_ID = 'SV_429WRg8lEN9jseW';
+const QUALTRICS_ADULT_MINDSET_SURVEY_ID = "SV_5zNrXkf1Z4ozvRs";
+const QUALTRICS_YOUTH_MINDSET_SURVEY_ID = "SV_afqUZdlh3nKp3wi";
+const QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID = "SV_0q7oaLHkRcDjPp4";
+const QUALTRICS_STAFF_MINDSET_SURVEY_ID = "SV_429WRg8lEN9jseW";
 const QUALTRICS_HOCKEY_CODE = "Hockey";
 
 // Qualtrics sends POST of x-www-form-urlencoded data
@@ -32,19 +36,22 @@ const port = 8080;
 
 app.use((req, res, next) => {
   // Note: Set other allowed origins here
-  const allowedOrigins = ['http://localhost:3000', 'http://psp-backend.fly.dev/'];
+  const allowedOrigins = [
+    "http://localhost:3000",
+    "http://psp-backend.fly.dev/",
+  ];
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader("Access-Control-Allow-Origin", origin);
   }
   next();
 });
 
 // This serves the psp-reports app on http://locahost:${port}
 // Remember to move the /build folder into psp-backend/
-app.use(express.static(path.join(__dirname, 'build')));
-app.get('*', function (req, res) {
-  res.sendFile(path.join(__dirname, 'build', 'index.html'))
+app.use(express.static(path.join(__dirname, "build")));
+app.get("*", function (req, res) {
+  res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
 const postToSlack = async (message) => {
@@ -52,197 +59,259 @@ const postToSlack = async (message) => {
 
   try {
     const result = await web.chat.postMessage({
-      channel: 'C04J0DQ4GKS',
+      channel: "C04J0DQ4GKS",
       text: message,
     });
-    console.log('Slack message successfully posted!');
+    console.log("Slack message successfully posted!");
   } catch (error) {
-    console.error('Error posting to Slack:', error);
+    console.error("Error posting to Slack:", error);
   }
 
   // Every time we post to Slack, we also post to Teams
-  const TEAMS_WEBHOOK_URL = 'https://prod-56.westus.logic.azure.com/workflows/e919a09e961c4508bb371908b28f838f/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=oONbkzMAtDtUbh96DPmJ72mHXTcIN1o9Kj6hS-QrfCA'
+  const TEAMS_WEBHOOK_URL =
+    "https://prod-56.westus.logic.azure.com/workflows/e919a09e961c4508bb371908b28f838f/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=oONbkzMAtDtUbh96DPmJ72mHXTcIN1o9Kj6hS-QrfCA";
   try {
     await axios.post(
       TEAMS_WEBHOOK_URL,
       { text: message },
-      { headers: { 'Content-Type': 'application/json' } }
+      { headers: { "Content-Type": "application/json" } }
     );
-    console.log('Teams message successfully posted!');
+    console.log("Teams message successfully posted!");
   } catch (error) {
-    console.error('Error posting to Teams:', error);
+    console.error("Error posting to Teams:", error);
   }
 };
 
 const getQualtricsResponse = async (surveyId, responseId) => {
   console.log(`Getting response from Qualtrics for ${responseId}...`);
-  const QUALTRICS_DATA_CENTER = 'iad1';
+  const QUALTRICS_DATA_CENTER = "iad1";
   const url = `https://${QUALTRICS_DATA_CENTER}.qualtrics.com/API/v3/surveys/${surveyId}/responses/${responseId}`;
-  
-  const qualtricsData = await axios.get(url, {
-    headers: {
-      'X-API-TOKEN': process.env.QUALTRICS_API_TOKEN,
-    }
-  })
-  .then((res) => {
-    if (surveyId === QUALTRICS_ADULT_MINDSET_SURVEY_ID) {
-      const data = res.data.result.values;
-      const athleteName = data.QID9_TEXT;
-      const email = data.QID12_TEXT;
-      const recordedDate = data.recordedDate;
-      const level = data.Level;
-      const providerName = res.data.result.labels?.QID11;
-      const language = data.Q_Language;
 
-      const growthMindsetPercentile = data.GP;
-      const growthMindsetPercentileCollege = data.GMColComparison;
-      const growthMindsetPercentilePro = data.GMProComparison;
+  const qualtricsData = await axios
+    .get(url, {
+      headers: {
+        "X-API-TOKEN": process.env.QUALTRICS_API_TOKEN,
+      },
+    })
+    .then((res) => {
+      if (surveyId === QUALTRICS_ADULT_MINDSET_SURVEY_ID) {
+        const data = res.data.result.values;
+        const athleteName = data.QID9_TEXT;
+        const email = data.QID12_TEXT;
+        const recordedDate = data.recordedDate;
+        const level = data.Level;
+        const providerName = res.data.result.labels?.QID11;
+        const language = data.Q_Language;
 
-      const mentalSkillsPercentile = data.PP;
-      const mentalSkillsPercentileCollege = data.MSColComparison;
-      const mentalSkillsPercentilePro = data.MSProComparison;
+        const growthMindsetPercentile = data.GP;
+        const growthMindsetPercentileCollege = data.GMColComparison;
+        const growthMindsetPercentilePro = data.GMProComparison;
 
-      const teamSupportPercentile = data.TP;
-      const teamSupportPercentileCollege = data.TSColComparison;
-      const teamSupportPercentilePro = data.TSProComparison;
+        const mentalSkillsPercentile = data.PP;
+        const mentalSkillsPercentileCollege = data.MSColComparison;
+        const mentalSkillsPercentilePro = data.MSProComparison;
 
-      const healthHabitsPercentile = data.PhP;
-      const healthHabitsPercentileCollege = data.HHColComparison;
-      const healthHabitsPercentilePro = data.HHProComparison;
+        const teamSupportPercentile = data.TP;
+        const teamSupportPercentileCollege = data.TSColComparison;
+        const teamSupportPercentilePro = data.TSProComparison;
 
-      const selfReflectionPercentile = data.MP;
-      const selfReflectionPercentileCollege = data.SRColComparison;
-      const selfReflectionPercentilePro = data.SRProComparison;
+        const healthHabitsPercentile = data.PhP;
+        const healthHabitsPercentileCollege = data.HHColComparison;
+        const healthHabitsPercentilePro = data.HHProComparison;
 
-      const growthMindsetScore = data.GrowthScore;
-      const mentalSkillsScore = data.MentalSkills;
-      const teamSupportScore = data.Team;
-      const healthHabitsScore = data.HealthHabits;
-      const selfReflectionScore = data.SelfReflection;
+        const selfReflectionPercentile = data.MP;
+        const selfReflectionPercentileCollege = data.SRColComparison;
+        const selfReflectionPercentilePro = data.SRProComparison;
 
-      // const slackMessage = `*New Qualtrics response fetched:*\n\nSurvey ID: ${surveyId}\nResponse ID: ${responseId}\nLevel: ${level}\n\nGrowth Mindset Percentile: ${growthMindsetPercentile}\nMental Skills Percentile: ${mentalSkillsPercentile}\nTeam Support Percentile: ${teamSupportPercentile}\nHealth Habits Percentile: ${healthHabitsPercentile}\nSelf Reflection Percentile: ${selfReflectionPercentile}\n`;
-      // postToSlack(slackMessage);
+        // const slackMessage = `*New Qualtrics response fetched:*\n\nSurvey ID: ${surveyId}\nResponse ID: ${responseId}\nLevel: ${level}\n\nGrowth Mindset Percentile: ${growthMindsetPercentile}\nMental Skills Percentile: ${mentalSkillsPercentile}\nTeam Support Percentile: ${teamSupportPercentile}\nHealth Habits Percentile: ${healthHabitsPercentile}\nSelf Reflection Percentile: ${selfReflectionPercentile}\n`;
+        // postToSlack(slackMessage);
 
-      const result = {
-        athleteName,
-        email,
-        recordedDate,
-        level,
-        providerName,
-        language,
-        growthMindsetPercentile,
-        growthMindsetPercentileCollege,
-        growthMindsetPercentilePro,
-        mentalSkillsPercentile,
-        mentalSkillsPercentileCollege,
-        mentalSkillsPercentilePro,
-        teamSupportPercentile,
-        teamSupportPercentileCollege,
-        teamSupportPercentilePro,
-        healthHabitsPercentile,
-        healthHabitsPercentileCollege,
-        healthHabitsPercentilePro,
-        selfReflectionPercentile,
-        selfReflectionPercentileCollege,
-        selfReflectionPercentilePro,
-        growthMindsetScore,
-        mentalSkillsScore,
-        teamSupportScore,
-        healthHabitsScore,
-        selfReflectionScore,
+        const result = {
+          athleteName,
+          email,
+          recordedDate,
+          level,
+          providerName,
+          language,
+          growthMindsetPercentile,
+          growthMindsetPercentileCollege,
+          growthMindsetPercentilePro,
+          mentalSkillsPercentile,
+          mentalSkillsPercentileCollege,
+          mentalSkillsPercentilePro,
+          teamSupportPercentile,
+          teamSupportPercentileCollege,
+          teamSupportPercentilePro,
+          healthHabitsPercentile,
+          healthHabitsPercentileCollege,
+          healthHabitsPercentilePro,
+          selfReflectionPercentile,
+          selfReflectionPercentileCollege,
+          selfReflectionPercentilePro,
+          growthMindsetScore,
+          mentalSkillsScore,
+          teamSupportScore,
+          healthHabitsScore,
+          selfReflectionScore,
+        };
+
+        console.log("Successfully fetched Qualtrics data - returning:");
+        console.log(result);
+
+        return result;
+      } else if (
+        surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID ||
+        surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID
+      ) {
+        const data = res.data.result.values;
+        const athleteName = data.QID7_TEXT;
+        const email = data.QID8_TEXT;
+        const recordedDate = data.recordedDate;
+        const age = data["Age"];
+        const providerName = data["provider_name"];
+        const sports = res.data.result.labels?.QID12;
+
+        const growthMindsetPercentile = data["GM Percentile"];
+        const selfConfidencePercentile = data["SC Percentile"];
+        const teamCulturePercentile = data["TC Percentile"];
+        const healthBehaviorsPercentile = data["HB Percentile"];
+        const growthMindsetScore = data["Growth Mindset Score"];
+        const selfConfidenceScore = data["Self Confidence Score"];
+        const teamCultureScore = data["Team Culture Score"];
+        const healthBehaviorsScore = data["Health Behaviors Score"];
+
+        const result = {
+          athleteName,
+          email,
+          recordedDate,
+          age,
+          providerName,
+          growthMindsetPercentile,
+          selfConfidencePercentile,
+          teamCulturePercentile,
+          healthBehaviorsPercentile,
+          growthMindsetScore,
+          selfConfidenceScore,
+          teamCultureScore,
+          healthBehaviorsScore,
+          sports,
+        };
+
+        console.log("Successfully fetched Qualtrics data - returning:");
+        console.log(result);
+
+        return result;
+      } else if (surveyId === QUALTRICS_STAFF_MINDSET_SURVEY_ID) {
+        const data = res.data.result.values;
+        const athleteName = data.Name;
+        const email = data.QID3_TEXT;
+        const recordedDate = data.recordedDate;
+        const providerName = res.data.result.labels?.QID17;
+
+        const performanceMindsetPercentile = data["PM Percentile"];
+        const mindfulIntentionPercentile = data["MI Percentile"];
+        const recoveryPercentile = data["R Percentile"];
+        const teamCulturePercentile = data["TC Percentile"];
+        const relationalDynamicsPercentile = data["RI Percentile"];
+        const performanceMindsetScore = data["Performance Mindset"];
+        const mindfulIntentionScore = data["Mindful Intention"];
+        const recoveryScore = data["Recovery"];
+        const teamCultureScore = data["Team Culture"];
+        const relationalDynamicsScore = data["Relational Intelligence"];
+
+        const result = {
+          athleteName,
+          email,
+          recordedDate,
+          providerName,
+          performanceMindsetPercentile,
+          mindfulIntentionPercentile,
+          recoveryPercentile,
+          teamCulturePercentile,
+          relationalDynamicsPercentile,
+          performanceMindsetScore,
+          mindfulIntentionScore,
+          recoveryScore,
+          teamCultureScore,
+          relationalDynamicsScore,
+        };
+
+        console.log("Successfully fetched Qualtrics data - returning:");
+        console.log(result);
+
+        return result;
       }
-
-      console.log('Successfully fetched Qualtrics data - returning:');
-      console.log(result)
-
-      return result;
-    } else if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID || surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID) {
-      const data = res.data.result.values;
-      const athleteName = data.QID7_TEXT;
-      const email = data.QID8_TEXT;
-      const recordedDate = data.recordedDate;
-      const age = data['Age'];
-      const providerName = data['provider_name'];
-      const sports = res.data.result.labels?.QID12;
-
-      const growthMindsetPercentile = data['GM Percentile'];
-      const selfConfidencePercentile = data['SC Percentile'];
-      const teamCulturePercentile = data['TC Percentile'];
-      const healthBehaviorsPercentile = data['HB Percentile'];
-      const growthMindsetScore = data['Growth Mindset Score'];
-      const selfConfidenceScore = data['Self Confidence Score'];
-      const teamCultureScore = data['Team Culture Score'];
-      const healthBehaviorsScore = data['Health Behaviors Score'];
-
-      const result = {
-        athleteName,
-        email,
-        recordedDate,
-        age,
-        providerName,
-        growthMindsetPercentile,
-        selfConfidencePercentile,
-        teamCulturePercentile,
-        healthBehaviorsPercentile,
-        growthMindsetScore,
-        selfConfidenceScore,
-        teamCultureScore,
-        healthBehaviorsScore,
-        sports,
-      }
-
-      console.log('Successfully fetched Qualtrics data - returning:');
-      console.log(result)
-
-      return result;
-    } else if (surveyId === QUALTRICS_STAFF_MINDSET_SURVEY_ID) {
-      const data = res.data.result.values;
-      const athleteName = data.Name;
-      const email = data.QID3_TEXT;
-      const recordedDate = data.recordedDate;
-      const providerName = res.data.result.labels?.QID17;
-
-      const performanceMindsetPercentile = data['PM Percentile'];
-      const mindfulIntentionPercentile = data['MI Percentile'];
-      const recoveryPercentile = data['R Percentile'];
-      const teamCulturePercentile = data['TC Percentile'];
-      const relationalDynamicsPercentile = data['RI Percentile'];
-      const performanceMindsetScore = data['Performance Mindset'];
-      const mindfulIntentionScore = data['Mindful Intention'];
-      const recoveryScore = data['Recovery'];
-      const teamCultureScore = data['Team Culture'];
-      const relationalDynamicsScore = data['Relational Intelligence'];
-
-      const result = {
-        athleteName,
-        email,
-        recordedDate,
-        providerName,
-        performanceMindsetPercentile,
-        mindfulIntentionPercentile,
-        recoveryPercentile,
-        teamCulturePercentile,
-        relationalDynamicsPercentile,
-        performanceMindsetScore,
-        mindfulIntentionScore,
-        recoveryScore,
-        teamCultureScore,
-        relationalDynamicsScore,
-      }
-
-      console.log('Successfully fetched Qualtrics data - returning:');
-      console.log(result)
-
-      return result;
-    }
-  })
-  .catch((error) => {
-    console.error(`An error occurred while retreiving responseId: ${responseId}`);
-    console.error(error)
-    throw Error(error);
-  })
+    })
+    .catch((error) => {
+      console.error(
+        `An error occurred while retreiving responseId: ${responseId}`
+      );
+      console.error(error);
+      throw Error(error);
+    });
 
   return qualtricsData;
+};
+
+// Helper function to wait for all images to load
+const waitForImagesToLoad = async (page) => {
+  console.log("Waiting for images to load...");
+
+  try {
+    await page.waitForFunction(
+      () => {
+        const images = Array.from(document.querySelectorAll("img"));
+        if (images.length === 0) {
+          console.log("No images found on page");
+          return true;
+        }
+
+        console.log(
+          `Found ${images.length} images, checking if they're loaded...`
+        );
+        return images.every((img) => {
+          const isLoaded =
+            img.complete && img.naturalHeight !== 0 && img.naturalWidth !== 0;
+          if (!isLoaded) {
+            console.log(
+              `Image not loaded yet: ${img.src || img.alt || "unknown"}`
+            );
+          }
+          return isLoaded;
+        });
+      },
+      { timeout: 20000 }
+    );
+
+    console.log("All images loaded successfully");
+  } catch (error) {
+    console.warn("Some images may not have loaded completely:", error.message);
+
+    // Fallback: wait for at least 80% of images to load
+    try {
+      await page.waitForFunction(
+        () => {
+          const images = Array.from(document.querySelectorAll("img"));
+          const loadedImages = images.filter(
+            (img) => img.complete && img.naturalHeight !== 0
+          );
+          const percentage = loadedImages.length / images.length;
+          console.log(
+            `Images loaded: ${loadedImages.length}/${
+              images.length
+            } (${Math.round(percentage * 100)}%)`
+          );
+          return percentage >= 0.8;
+        },
+        { timeout: 10000 }
+      );
+
+      console.log("At least 80% of images loaded");
+    } catch (fallbackError) {
+      console.warn("Using fallback timeout for image loading");
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  }
 };
 
 const generatePdfReport = async (reportUrl, responseId) => {
@@ -253,16 +322,19 @@ const generatePdfReport = async (reportUrl, responseId) => {
 
   await page.goto(reportUrl);
 
-  // Wait for page to fully load
-  await new Promise(function(resolve) { 
-    setTimeout(resolve, 4000);
-  });
+  // Wait for images to load completely before generating PDF
+  await waitForImagesToLoad(page);
 
-  await page.pdf({ path: `output/psp-mindset-assessment-report-${responseId}.pdf` })
-  await browser.close()
+  // Additional wait for any dynamic content
+  await page.waitForLoadState("networkidle", { timeout: 10000 });
+
+  await page.pdf({
+    path: `output/psp-mindset-assessment-report-${responseId}.pdf`,
+  });
+  await browser.close();
 
   console.log("Successfully generated PDF report");
-}
+};
 
 const uploadToS3 = async (surveyId, responseId) => {
   const REGION = "us-east-1";
@@ -270,23 +342,25 @@ const uploadToS3 = async (surveyId, responseId) => {
     region: REGION,
   });
 
-  let BUCKET_NAME = '';
+  let BUCKET_NAME = "";
   if (surveyId === QUALTRICS_ADULT_MINDSET_SURVEY_ID) {
-    BUCKET_NAME = 'psp-mindset-assessment-reports';
+    BUCKET_NAME = "psp-mindset-assessment-reports";
   } else if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID) {
-    BUCKET_NAME = 'psp-mindset-assessment-reports-youth';
+    BUCKET_NAME = "psp-mindset-assessment-reports-youth";
   } else if (surveyId === QUALTRICS_STAFF_MINDSET_SURVEY_ID) {
-    BUCKET_NAME = 'psp-mindset-assessment-reports-staff'
+    BUCKET_NAME = "psp-mindset-assessment-reports-staff";
   } else if (surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID) {
-    BUCKET_NAME = 'psp-mindset-assessment-reports-youth-golf';
+    BUCKET_NAME = "psp-mindset-assessment-reports-youth-golf";
   }
   const OBJECT_NAME = `psp-mindset-assessment-report-${responseId}.pdf`;
-  const fileContent = fs.readFileSync(`output/psp-mindset-assessment-report-${responseId}.pdf`);
+  const fileContent = fs.readFileSync(
+    `output/psp-mindset-assessment-report-${responseId}.pdf`
+  );
 
   const putObjectParams = {
     Bucket: BUCKET_NAME,
     Key: OBJECT_NAME,
-    Body: fileContent
+    Body: fileContent,
   };
 
   const putObjectCommand = new PutObjectCommand(putObjectParams);
@@ -300,18 +374,31 @@ const uploadToS3 = async (surveyId, responseId) => {
 
   const getObjectCommand = new GetObjectCommand(getObjectParams);
   // max expiration is 1 week
-  const url = await getSignedUrl(s3Client, getObjectCommand, { expiresIn: 604800 });
+  const url = await getSignedUrl(s3Client, getObjectCommand, {
+    expiresIn: 604800,
+  });
   return url;
 };
 
-const emailReport = async (surveyId, athleteName, providerName, reportUrl, email, language) => {
+const emailReport = async (
+  surveyId,
+  athleteName,
+  providerName,
+  reportUrl,
+  email,
+  language
+) => {
   let data = null;
 
-  if (surveyId === QUALTRICS_ADULT_MINDSET_SURVEY_ID && language === QUALTRICS_SPANISH_LANGUAGE_CODE) {
+  if (
+    surveyId === QUALTRICS_ADULT_MINDSET_SURVEY_ID &&
+    language === QUALTRICS_SPANISH_LANGUAGE_CODE
+  ) {
     data = {
       from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
       to: email,
-      subject: "Los resultados de su evaluación de mentalidad de Premier Sport Psychology",
+      subject:
+        "Los resultados de su evaluación de mentalidad de Premier Sport Psychology",
       html: `
 <!doctype html>
 <html>
@@ -613,7 +700,7 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
                     <tr>
                       <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">
                         <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Hi ${athleteName},</p>
-                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Thank you for completing Premier Sport Psychology’s Mindset Assessment. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.
+                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Thank you for completing Premier Sport Psychology's Mindset Assessment. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.
                         </p>
                         <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Please download your report below to view your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.</p>
                         <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; box-sizing: border-box; width: 100%;" width="100%">
@@ -664,13 +751,17 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
   </body>
 </html>
       `,
-      text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology’s Mindset Assessment. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.\n\nPlease download your report below to view your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about the athlete mindset and sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/).`,
+      text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology's Mindset Assessment. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.\n\nPlease download your report below to view your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about the athlete mindset and sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/).`,
     };
-  } else if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID || surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID) {
+  } else if (
+    surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID ||
+    surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID
+  ) {
     data = {
       from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
       to: email,
-      subject: "Your Youth Mindset Assessment Results from Premier Sport Psychology",
+      subject:
+        "Your Youth Mindset Assessment Results from Premier Sport Psychology",
       html: `
 <!doctype html>
 <html>
@@ -790,7 +881,7 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
                     <tr>
                       <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">
                         <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Hi ${athleteName},</p>
-                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Thank you for completing Premier Sport Psychology’s Mindset Assessment for youth athletes. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.
+                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Thank you for completing Premier Sport Psychology's Mindset Assessment for youth athletes. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.
                         </p>
                         <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Please use the link below to download your report. This report will show you your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.</p>
                         <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; box-sizing: border-box; width: 100%;" width="100%">
@@ -841,7 +932,7 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
   </body>
 </html>
       `,
-      text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology’s Mindset Assessment for youth athletes. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.\n\nPlease use the link below to download your report. This report will show you your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about the athlete mindset and sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/).`,
+      text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology's Mindset Assessment for youth athletes. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and performance as an athlete. It is also an important step on the road to improved mental performance.\n\nPlease use the link below to download your report. This report will show you your scores and how they compare to other athletes at your level. We encourage you to share these results with your coaches, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about the athlete mindset and sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/).`,
     };
   } else if (surveyId === QUALTRICS_STAFF_MINDSET_SURVEY_ID) {
     data = {
@@ -967,7 +1058,7 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
                     <tr>
                       <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;" valign="top">
                         <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Hi ${athleteName},</p>
-                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Thank you for completing Premier Sport Psychology’s Mindset Assessment for Sport Staff. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and development as someone who works in the sport industry. It is also an important step on the road to improved mental performance.
+                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Thank you for completing Premier Sport Psychology's Mindset Assessment for Sport Staff. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and development as someone who works in the sport industry. It is also an important step on the road to improved mental performance.
                         </p>
                         <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Please download your report below to view your scores and how they compare to other sport staff at your level. We encourage you to share these results with your supervisors, sport psychology provider, or others in your life who are working to support your success.</p>
                         <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; box-sizing: border-box; width: 100%;" width="100%">
@@ -1018,12 +1109,12 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
   </body>
 </html>
       `,
-      text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology’s Mindset Assessment for Sport Staff. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and development as someone who works in the sport industry. It is also an important step on the road to improved mental performance. Please see the link below to download your report. This report will show you your scores and how they compare to other sport staff at your level. We encourage you to share these results with your supervisors, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/).`,
+      text: `Hi {athleteName},\n\nThank you for completing Premier Sport Psychology's Mindset Assessment for Sport Staff. This assessment is designed to assess your behaviors, thoughts, and feelings related to your wellness and development as someone who works in the sport industry. It is also an important step on the road to improved mental performance. Please see the link below to download your report. This report will show you your scores and how they compare to other sport staff at your level. We encourage you to share these results with your supervisors, sport psychology provider, or others in your life who are working to support your success.\n\nDownload your report: ${reportUrl}\n\nAre you interested in learning more about sport psychology? We have a dedicated team of professionals ready to help! Our website (https://premiersportpsychology.com/) includes resources and information about sport psychology, as well as a link to request an appointment (https://premiersportpsychology.com/request-appointment/).`,
     };
   }
 
   if (data) {
-    mailgun.messages().send(data, function(error, body) {
+    mailgun.messages().send(data, function (error, body) {
       if (error) {
         console.error(error);
         throw Error(error);
@@ -1054,7 +1145,7 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
     "Dr. Lauren Zimmerman": "lzimmerman@premiersportpsychology.com",
     "Canon Pieper": "cpieper@premiersportpsychology.com",
     "Dr. Carlosjavier Sanchez": "csanchez@premiersportpsychology.com",
-  }
+  };
 
   if (providerName && providerName in providerNameToEmailMap) {
     const providerEmail = providerNameToEmailMap[providerName];
@@ -1062,7 +1153,7 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
     const dataProviderEmail = {
       from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
       to: providerEmail,
-      bcc: 'admin@premiersportpsychology.com',
+      bcc: "admin@premiersportpsychology.com",
       subject: `Mindset Assessment Result for ${athleteName}`,
       html: `
 <!doctype html>
@@ -1232,7 +1323,7 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
       text: `Hi {providerName},\n\nYour athlete, ${athleteName}, recently completed a Mindset Assessment. You can download their report here: ${reportUrl}.`,
     };
 
-    mailgun.messages().send(dataProviderEmail, function(error, body) {
+    mailgun.messages().send(dataProviderEmail, function (error, body) {
       if (error) {
         console.error(error);
         throw Error(error);
@@ -1241,399 +1332,476 @@ const emailReport = async (surveyId, athleteName, providerName, reportUrl, email
       }
     });
   }
-}
+};
 
 // Consumes Qualtrics webhook for Adult Mindset Report
-app.post('/generate_report', (req, res) => {
-  console.log('Webhook listener received for Adult Mindset Report - request body:')
+app.post("/generate_report", (req, res) => {
+  console.log(
+    "Webhook listener received for Adult Mindset Report - request body:"
+  );
   console.log(req.body);
 
   // Send a 200 status code to acknowledge receiving the webhook
   res.status(200).end();
 
-  const surveyId = req.body['SurveyID'];
-  const responseId = req.body['ResponseID'];
-  const responseTimestamp = req.body['CompletedDate'];
+  const surveyId = req.body["SurveyID"];
+  const responseId = req.body["ResponseID"];
+  const responseTimestamp = req.body["CompletedDate"];
 
   const slackMessage = `*New Qualtrics response received (Adult Mindset):*\n\nSurvey ID: ${surveyId}\nResponse ID: ${responseId}\nTimestamp: ${responseTimestamp}`;
   postToSlack(slackMessage);
 
   if (surveyId === QUALTRICS_ADULT_MINDSET_SURVEY_ID) {
     getQualtricsResponse(surveyId, responseId)
-    .then((qualtricsData) => {
-      const {
-        athleteName,
-        email,
-        recordedDate,
-        level,
-        providerName,
-        language,
-        growthMindsetPercentile,
-        growthMindsetPercentileCollege,
-        growthMindsetPercentilePro,
-        mentalSkillsPercentile,
-        mentalSkillsPercentileCollege,
-        mentalSkillsPercentilePro,
-        teamSupportPercentile,
-        teamSupportPercentileCollege,
-        teamSupportPercentilePro,
-        healthHabitsPercentile,
-        healthHabitsPercentileCollege,
-        healthHabitsPercentilePro,
-        selfReflectionPercentile,
-        selfReflectionPercentileCollege,
-        selfReflectionPercentilePro,
-        growthMindsetScore,
-        mentalSkillsScore,
-        teamSupportScore,
-        healthHabitsScore,
-        selfReflectionScore,
-      } = qualtricsData;
-  
-      const urlParams = {
-        reportOnly: 'true',
-        athleteName,
-        recordedDate,
-        level,
-        language: language === QUALTRICS_SPANISH_LANGUAGE_CODE ? 'es' : 'en',
-        growthMindsetPercentile: growthMindsetPercentile.replace('%', ''),
-        growthMindsetPercentileCollege: growthMindsetPercentileCollege.replace('%', ''),
-        growthMindsetPercentilePro: growthMindsetPercentilePro.replace('%', ''),
-        mentalSkillsPercentile: mentalSkillsPercentile.replace('%', ''),
-        mentalSkillsPercentileCollege: mentalSkillsPercentileCollege.replace('%', ''),
-        mentalSkillsPercentilePro: mentalSkillsPercentilePro.replace('%', ''),
-        teamSupportPercentile: teamSupportPercentile.replace('%', ''),
-        teamSupportPercentileCollege: teamSupportPercentileCollege.replace('%', ''),
-        teamSupportPercentilePro: teamSupportPercentilePro.replace('%', ''),
-        healthHabitsPercentile: healthHabitsPercentile.replace('%', ''),
-        healthHabitsPercentileCollege: healthHabitsPercentileCollege.replace('%', ''),
-        healthHabitsPercentilePro: healthHabitsPercentilePro.replace('%', ''),
-        selfReflectionPercentile: selfReflectionPercentile.replace('%', ''),
-        selfReflectionPercentileCollege: selfReflectionPercentileCollege.replace('%', ''),
-        selfReflectionPercentilePro: selfReflectionPercentilePro.replace('%', ''),
-        growthMindsetScore,
-        mentalSkillsScore,
-        teamSupportScore,
-        healthHabitsScore,
-        selfReflectionScore,
-      }
-      const url = 'https://psp-backend.fly.dev/?' + querystring.stringify(urlParams);
-  
-      generatePdfReport(url, responseId)
-      .then(() => {
-        uploadToS3(surveyId, responseId)
-        .then(reportUrl => {
-          console.log(`Successful upload to S3! Presigned URL: ${reportUrl}`);
-          emailReport(surveyId, athleteName, providerName, reportUrl, email, language)
+      .then((qualtricsData) => {
+        const {
+          athleteName,
+          email,
+          recordedDate,
+          level,
+          providerName,
+          language,
+          growthMindsetPercentile,
+          growthMindsetPercentileCollege,
+          growthMindsetPercentilePro,
+          mentalSkillsPercentile,
+          mentalSkillsPercentileCollege,
+          mentalSkillsPercentilePro,
+          teamSupportPercentile,
+          teamSupportPercentileCollege,
+          teamSupportPercentilePro,
+          healthHabitsPercentile,
+          healthHabitsPercentileCollege,
+          healthHabitsPercentilePro,
+          selfReflectionPercentile,
+          selfReflectionPercentileCollege,
+          selfReflectionPercentilePro,
+          growthMindsetScore,
+          mentalSkillsScore,
+          teamSupportScore,
+          healthHabitsScore,
+          selfReflectionScore,
+        } = qualtricsData;
+
+        const urlParams = {
+          reportOnly: "true",
+          athleteName,
+          recordedDate,
+          level,
+          language: language === QUALTRICS_SPANISH_LANGUAGE_CODE ? "es" : "en",
+          growthMindsetPercentile: growthMindsetPercentile.replace("%", ""),
+          growthMindsetPercentileCollege:
+            growthMindsetPercentileCollege.replace("%", ""),
+          growthMindsetPercentilePro: growthMindsetPercentilePro.replace(
+            "%",
+            ""
+          ),
+          mentalSkillsPercentile: mentalSkillsPercentile.replace("%", ""),
+          mentalSkillsPercentileCollege: mentalSkillsPercentileCollege.replace(
+            "%",
+            ""
+          ),
+          mentalSkillsPercentilePro: mentalSkillsPercentilePro.replace("%", ""),
+          teamSupportPercentile: teamSupportPercentile.replace("%", ""),
+          teamSupportPercentileCollege: teamSupportPercentileCollege.replace(
+            "%",
+            ""
+          ),
+          teamSupportPercentilePro: teamSupportPercentilePro.replace("%", ""),
+          healthHabitsPercentile: healthHabitsPercentile.replace("%", ""),
+          healthHabitsPercentileCollege: healthHabitsPercentileCollege.replace(
+            "%",
+            ""
+          ),
+          healthHabitsPercentilePro: healthHabitsPercentilePro.replace("%", ""),
+          selfReflectionPercentile: selfReflectionPercentile.replace("%", ""),
+          selfReflectionPercentileCollege:
+            selfReflectionPercentileCollege.replace("%", ""),
+          selfReflectionPercentilePro: selfReflectionPercentilePro.replace(
+            "%",
+            ""
+          ),
+          growthMindsetScore,
+          mentalSkillsScore,
+          teamSupportScore,
+          healthHabitsScore,
+          selfReflectionScore,
+        };
+        const url =
+          "https://psp-backend.fly.dev/?" + querystring.stringify(urlParams);
+
+        generatePdfReport(url, responseId)
           .then(() => {
-            console.log('All steps completed!');
-            const slackMessage = `*Email with report delivered (Adult Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
-            postToSlack(slackMessage);
+            uploadToS3(surveyId, responseId)
+              .then((reportUrl) => {
+                console.log(
+                  `Successful upload to S3! Presigned URL: ${reportUrl}`
+                );
+                emailReport(
+                  surveyId,
+                  athleteName,
+                  providerName,
+                  reportUrl,
+                  email,
+                  language
+                )
+                  .then(() => {
+                    console.log("All steps completed!");
+                    const slackMessage = `*Email with report delivered (Adult Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+                    postToSlack(slackMessage);
+                  })
+                  .catch((error) => {
+                    console.error(error);
+                    const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+                    postToSlack(slackMessage);
+                  });
+              })
+              .catch((error) => {
+                console.error(error);
+                const slackMessage = `*Failed to upload to S3:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+                postToSlack(slackMessage);
+              });
           })
-          .catch(error => {
+          .catch((error) => {
             console.error(error);
-            const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            const slackMessage = `*Failed to generate report:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
             postToSlack(slackMessage);
-          })
-        })
-        .catch(error => {
-          console.error(error);
-          const slackMessage = `*Failed to upload to S3:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
-          postToSlack(slackMessage);
-        });
+          });
       })
-      .catch(error => {
+      .catch((error) => {
         console.error(error);
-        const slackMessage = `*Failed to generate report:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+        const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
         postToSlack(slackMessage);
-      })
-    })
-    .catch(error => {
-      console.error(error);
-      const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
-      postToSlack(slackMessage);
-    })
+      });
   }
 });
 
-app.post('/generate_report_youth_mindset', (req, res) => {
-  console.log('Webhook listener received for Youth Mindset Report - request body:')
+app.post("/generate_report_youth_mindset", (req, res) => {
+  console.log(
+    "Webhook listener received for Youth Mindset Report - request body:"
+  );
   console.log(req.body);
 
   // Send a 200 status code to acknowledge receiving the webhook
   res.status(200).end();
 
-  const surveyId = req.body['SurveyID'];
-  const responseId = req.body['ResponseID'];
-  const responseTimestamp = req.body['CompletedDate'];
+  const surveyId = req.body["SurveyID"];
+  const responseId = req.body["ResponseID"];
+  const responseTimestamp = req.body["CompletedDate"];
 
   const slackMessage = `*New Qualtrics response received (Youth Mindset):*\n\nSurvey ID: ${surveyId}\nResponse ID: ${responseId}\nTimestamp: ${responseTimestamp}`;
   postToSlack(slackMessage);
 
   if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID) {
     getQualtricsResponse(surveyId, responseId)
-    .then((qualtricsData) => {
-      const {
-        athleteName,
-        email,
-        recordedDate,
-        age,
-        providerName,
-        growthMindsetPercentile,
-        selfConfidencePercentile,
-        teamCulturePercentile,
-        healthBehaviorsPercentile,
-        growthMindsetScore,
-        selfConfidenceScore,
-        teamCultureScore,
-        healthBehaviorsScore,
-        sports,
-      } = qualtricsData;
+      .then((qualtricsData) => {
+        const {
+          athleteName,
+          email,
+          recordedDate,
+          age,
+          providerName,
+          growthMindsetPercentile,
+          selfConfidencePercentile,
+          teamCulturePercentile,
+          healthBehaviorsPercentile,
+          growthMindsetScore,
+          selfConfidenceScore,
+          teamCultureScore,
+          healthBehaviorsScore,
+          sports,
+        } = qualtricsData;
 
-      // TODO: Update this once language is dynamic
-      const language = 'en';
-      const isHockeyReport = sports && sports.includes(QUALTRICS_HOCKEY_CODE);
-  
-      const urlParams = {
-        reportOnly: 'true',
-        athleteName,
-        recordedDate,
-        age,
-        language,
-        growthMindsetPercentile: growthMindsetPercentile.replace('%', ''),
-        selfConfidencePercentile: selfConfidencePercentile.replace('%', ''),
-        teamCulturePercentile: teamCulturePercentile.replace('%', ''),
-        healthBehaviorsPercentile: healthBehaviorsPercentile.replace('%', ''),
-        growthMindsetScore,
-        selfConfidenceScore,
-        teamCultureScore,
-        healthBehaviorsScore,
-        sport: isHockeyReport ? 'hockey' : '',
-      }
-      const url = 'https://psp-backend.fly.dev/youth/?' + querystring.stringify(urlParams);
-  
-      generatePdfReport(url, responseId)
-      .then(() => {
-        uploadToS3(surveyId, responseId)
-        .then(reportUrl => {
-          console.log(`Successful upload to S3! Presigned URL: ${reportUrl}`);
-          emailReport(surveyId, athleteName, providerName, reportUrl, email, language)
+        // TODO: Update this once language is dynamic
+        const language = "en";
+        const isHockeyReport = sports && sports.includes(QUALTRICS_HOCKEY_CODE);
+
+        const urlParams = {
+          reportOnly: "true",
+          athleteName,
+          recordedDate,
+          age,
+          language,
+          growthMindsetPercentile: growthMindsetPercentile.replace("%", ""),
+          selfConfidencePercentile: selfConfidencePercentile.replace("%", ""),
+          teamCulturePercentile: teamCulturePercentile.replace("%", ""),
+          healthBehaviorsPercentile: healthBehaviorsPercentile.replace("%", ""),
+          growthMindsetScore,
+          selfConfidenceScore,
+          teamCultureScore,
+          healthBehaviorsScore,
+          sport: isHockeyReport ? "hockey" : "",
+        };
+        const url =
+          "https://psp-backend.fly.dev/youth/?" +
+          querystring.stringify(urlParams);
+
+        generatePdfReport(url, responseId)
           .then(() => {
-            console.log('All steps completed!');
-            let slackMessage = '';
-            if (isHockeyReport) {
-              slackMessage = `*Email with report delivered (Youth Mindset - Hockey):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
-            } else {
-              slackMessage = `*Email with report delivered (Youth Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
-            }
-            postToSlack(slackMessage);
+            uploadToS3(surveyId, responseId)
+              .then((reportUrl) => {
+                console.log(
+                  `Successful upload to S3! Presigned URL: ${reportUrl}`
+                );
+                emailReport(
+                  surveyId,
+                  athleteName,
+                  providerName,
+                  reportUrl,
+                  email,
+                  language
+                )
+                  .then(() => {
+                    console.log("All steps completed!");
+                    let slackMessage = "";
+                    if (isHockeyReport) {
+                      slackMessage = `*Email with report delivered (Youth Mindset - Hockey):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+                    } else {
+                      slackMessage = `*Email with report delivered (Youth Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+                    }
+                    postToSlack(slackMessage);
+                  })
+                  .catch((error) => {
+                    console.error(error);
+                    const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+                    postToSlack(slackMessage);
+                  });
+              })
+              .catch((error) => {
+                console.error(error);
+                const slackMessage = `*Failed to upload to S3:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+                postToSlack(slackMessage);
+              });
           })
-          .catch(error => {
+          .catch((error) => {
             console.error(error);
-            const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            const slackMessage = `*Failed to generate report:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
             postToSlack(slackMessage);
-          })
-        })
-        .catch(error => {
-          console.error(error);
-          const slackMessage = `*Failed to upload to S3:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
-          postToSlack(slackMessage);
-        });
+          });
       })
-      .catch(error => {
+      .catch((error) => {
         console.error(error);
-        const slackMessage = `*Failed to generate report:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+        const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
         postToSlack(slackMessage);
-      })
-    })
-    .catch(error => {
-      console.error(error);
-      const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
-      postToSlack(slackMessage);
-    })
+      });
   }
 });
 
-app.post('/generate_report_youth_golf_mindset', (req, res) => {
-  console.log('Webhook listener received for Youth Mindset Golf Report - request body:')
+app.post("/generate_report_youth_golf_mindset", (req, res) => {
+  console.log(
+    "Webhook listener received for Youth Mindset Golf Report - request body:"
+  );
   console.log(req.body);
 
   // Send a 200 status code to acknowledge receiving the webhook
   res.status(200).end();
 
-  const surveyId = req.body['SurveyID'];
-  const responseId = req.body['ResponseID'];
-  const responseTimestamp = req.body['CompletedDate'];
+  const surveyId = req.body["SurveyID"];
+  const responseId = req.body["ResponseID"];
+  const responseTimestamp = req.body["CompletedDate"];
 
   const slackMessage = `*New Qualtrics response received (Youth Mindset Golf):*\n\nSurvey ID: ${surveyId}\nResponse ID: ${responseId}\nTimestamp: ${responseTimestamp}`;
   postToSlack(slackMessage);
 
   if (surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID) {
     getQualtricsResponse(surveyId, responseId)
-    .then((qualtricsData) => {
-      const {
-        athleteName,
-        email,
-        recordedDate,
-        age,
-        providerName,
-        growthMindsetPercentile,
-        selfConfidencePercentile,
-        teamCulturePercentile,
-        healthBehaviorsPercentile,
-        growthMindsetScore,
-        selfConfidenceScore,
-        teamCultureScore,
-        healthBehaviorsScore,
-      } = qualtricsData;
+      .then((qualtricsData) => {
+        const {
+          athleteName,
+          email,
+          recordedDate,
+          age,
+          providerName,
+          growthMindsetPercentile,
+          selfConfidencePercentile,
+          teamCulturePercentile,
+          healthBehaviorsPercentile,
+          growthMindsetScore,
+          selfConfidenceScore,
+          teamCultureScore,
+          healthBehaviorsScore,
+        } = qualtricsData;
 
-      // TODO: Update this once language is dynamic
-      const language = 'en';
-  
-      const urlParams = {
-        reportOnly: 'true',
-        athleteName,
-        recordedDate,
-        age,
-        language,
-        growthMindsetPercentile: growthMindsetPercentile.replace('%', ''),
-        selfConfidencePercentile: selfConfidencePercentile.replace('%', ''),
-        teamCulturePercentile: teamCulturePercentile.replace('%', ''),
-        healthBehaviorsPercentile: healthBehaviorsPercentile.replace('%', ''),
-        growthMindsetScore,
-        selfConfidenceScore,
-        teamCultureScore,
-        healthBehaviorsScore,
-      }
-      const url = 'https://psp-backend.fly.dev/youth-golf/?' + querystring.stringify(urlParams);
-  
-      generatePdfReport(url, responseId)
-      .then(() => {
-        uploadToS3(surveyId, responseId)
-        .then(reportUrl => {
-          console.log(`Successful upload to S3! Presigned URL: ${reportUrl}`);
-          emailReport(surveyId, athleteName, providerName, reportUrl, email, language)
+        // TODO: Update this once language is dynamic
+        const language = "en";
+
+        const urlParams = {
+          reportOnly: "true",
+          athleteName,
+          recordedDate,
+          age,
+          language,
+          growthMindsetPercentile: growthMindsetPercentile.replace("%", ""),
+          selfConfidencePercentile: selfConfidencePercentile.replace("%", ""),
+          teamCulturePercentile: teamCulturePercentile.replace("%", ""),
+          healthBehaviorsPercentile: healthBehaviorsPercentile.replace("%", ""),
+          growthMindsetScore,
+          selfConfidenceScore,
+          teamCultureScore,
+          healthBehaviorsScore,
+        };
+        const url =
+          "https://psp-backend.fly.dev/youth-golf/?" +
+          querystring.stringify(urlParams);
+
+        generatePdfReport(url, responseId)
           .then(() => {
-            console.log('All steps completed!');
-            const slackMessage = `*Email with report delivered (Youth Mindset Golf):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
-            postToSlack(slackMessage);
+            uploadToS3(surveyId, responseId)
+              .then((reportUrl) => {
+                console.log(
+                  `Successful upload to S3! Presigned URL: ${reportUrl}`
+                );
+                emailReport(
+                  surveyId,
+                  athleteName,
+                  providerName,
+                  reportUrl,
+                  email,
+                  language
+                )
+                  .then(() => {
+                    console.log("All steps completed!");
+                    const slackMessage = `*Email with report delivered (Youth Mindset Golf):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+                    postToSlack(slackMessage);
+                  })
+                  .catch((error) => {
+                    console.error(error);
+                    const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+                    postToSlack(slackMessage);
+                  });
+              })
+              .catch((error) => {
+                console.error(error);
+                const slackMessage = `*Failed to upload to S3:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+                postToSlack(slackMessage);
+              });
           })
-          .catch(error => {
+          .catch((error) => {
             console.error(error);
-            const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            const slackMessage = `*Failed to generate report:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
             postToSlack(slackMessage);
-          })
-        })
-        .catch(error => {
-          console.error(error);
-          const slackMessage = `*Failed to upload to S3:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
-          postToSlack(slackMessage);
-        });
+          });
       })
-      .catch(error => {
+      .catch((error) => {
         console.error(error);
-        const slackMessage = `*Failed to generate report:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+        const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
         postToSlack(slackMessage);
-      })
-    })
-    .catch(error => {
-      console.error(error);
-      const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
-      postToSlack(slackMessage);
-    })
+      });
   }
 });
 
-app.post('/generate_report_staff_mindset', (req, res) => {
-  console.log('Webhook listener received for Staff Mindset Report - request body:')
+app.post("/generate_report_staff_mindset", (req, res) => {
+  console.log(
+    "Webhook listener received for Staff Mindset Report - request body:"
+  );
   console.log(req.body);
 
   // Send a 200 status code to acknowledge receiving the webhook
   res.status(200).end();
 
-  const surveyId = req.body['SurveyID'];
-  const responseId = req.body['ResponseID'];
-  const responseTimestamp = req.body['CompletedDate'];
+  const surveyId = req.body["SurveyID"];
+  const responseId = req.body["ResponseID"];
+  const responseTimestamp = req.body["CompletedDate"];
 
   const slackMessage = `*New Qualtrics response received (Staff Mindset):*\n\nSurvey ID: ${surveyId}\nResponse ID: ${responseId}\nTimestamp: ${responseTimestamp}`;
   postToSlack(slackMessage);
 
   if (surveyId === QUALTRICS_STAFF_MINDSET_SURVEY_ID) {
     getQualtricsResponse(surveyId, responseId)
-    .then((qualtricsData) => {
-      const {
-        athleteName,
-        email,
-        recordedDate,
-        providerName,
-        performanceMindsetPercentile,
-        mindfulIntentionPercentile,
-        recoveryPercentile,
-        teamCulturePercentile,
-        relationalDynamicsPercentile,
-        performanceMindsetScore,
-        mindfulIntentionScore,
-        recoveryScore,
-        teamCultureScore,
-        relationalDynamicsScore,
-      } = qualtricsData;
+      .then((qualtricsData) => {
+        const {
+          athleteName,
+          email,
+          recordedDate,
+          providerName,
+          performanceMindsetPercentile,
+          mindfulIntentionPercentile,
+          recoveryPercentile,
+          teamCulturePercentile,
+          relationalDynamicsPercentile,
+          performanceMindsetScore,
+          mindfulIntentionScore,
+          recoveryScore,
+          teamCultureScore,
+          relationalDynamicsScore,
+        } = qualtricsData;
 
-      // TODO: Update this once language is dynamic
-      const language = 'en';
-  
-      const urlParams = {
-        reportOnly: 'true',
-        athleteName,
-        recordedDate,
-        language,
-        performanceMindsetPercentile: performanceMindsetPercentile.replace('%', ''),
-        mindfulIntentionPercentile: mindfulIntentionPercentile.replace('%', ''),
-        recoveryPercentile: recoveryPercentile.replace('%', ''),
-        teamCulturePercentile: teamCulturePercentile.replace('%', ''),
-        relationalDynamicsPercentile: relationalDynamicsPercentile.replace('%', ''),
-        relationalDynamicsPercentile,
-        performanceMindsetScore,
-        mindfulIntentionScore,
-        recoveryScore,
-        teamCultureScore,
-        relationalDynamicsScore,
-      }
-      const url = 'https://psp-backend.fly.dev/staff/?' + querystring.stringify(urlParams);
-  
-      generatePdfReport(url, responseId)
-      .then(() => {
-        uploadToS3(surveyId, responseId)
-        .then(reportUrl => {
-          console.log(`Successful upload to S3! Presigned URL: ${reportUrl}`);
-          emailReport(surveyId, athleteName, providerName, reportUrl, email, language)
+        // TODO: Update this once language is dynamic
+        const language = "en";
+
+        const urlParams = {
+          reportOnly: "true",
+          athleteName,
+          recordedDate,
+          language,
+          performanceMindsetPercentile: performanceMindsetPercentile.replace(
+            "%",
+            ""
+          ),
+          mindfulIntentionPercentile: mindfulIntentionPercentile.replace(
+            "%",
+            ""
+          ),
+          recoveryPercentile: recoveryPercentile.replace("%", ""),
+          teamCulturePercentile: teamCulturePercentile.replace("%", ""),
+          relationalDynamicsPercentile: relationalDynamicsPercentile.replace(
+            "%",
+            ""
+          ),
+          relationalDynamicsPercentile,
+          performanceMindsetScore,
+          mindfulIntentionScore,
+          recoveryScore,
+          teamCultureScore,
+          relationalDynamicsScore,
+        };
+        const url =
+          "https://psp-backend.fly.dev/staff/?" +
+          querystring.stringify(urlParams);
+
+        generatePdfReport(url, responseId)
           .then(() => {
-            console.log('All steps completed!');
-            const slackMessage = `*Email with report delivered (Staff Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
-            postToSlack(slackMessage);
+            uploadToS3(surveyId, responseId)
+              .then((reportUrl) => {
+                console.log(
+                  `Successful upload to S3! Presigned URL: ${reportUrl}`
+                );
+                emailReport(
+                  surveyId,
+                  athleteName,
+                  providerName,
+                  reportUrl,
+                  email,
+                  language
+                )
+                  .then(() => {
+                    console.log("All steps completed!");
+                    const slackMessage = `*Email with report delivered (Staff Mindset):*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+                    postToSlack(slackMessage);
+                  })
+                  .catch((error) => {
+                    console.error(error);
+                    const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+                    postToSlack(slackMessage);
+                  });
+              })
+              .catch((error) => {
+                console.error(error);
+                const slackMessage = `*Failed to upload to S3:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+                postToSlack(slackMessage);
+              });
           })
-          .catch(error => {
+          .catch((error) => {
             console.error(error);
-            const slackMessage = `*Failed to send email with report:*\n\nResponse ID: ${responseId}\nEmail: ${email}\nLanguage: ${language}\nReport URL: ${reportUrl}`;
+            const slackMessage = `*Failed to generate report:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
             postToSlack(slackMessage);
-          })
-        })
-        .catch(error => {
-          console.error(error);
-          const slackMessage = `*Failed to upload to S3:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
-          postToSlack(slackMessage);
-        });
+          });
       })
-      .catch(error => {
+      .catch((error) => {
         console.error(error);
-        const slackMessage = `*Failed to generate report:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+        const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
         postToSlack(slackMessage);
-      })
-    })
-    .catch(error => {
-      console.error(error);
-      const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
-      postToSlack(slackMessage);
-    })
+      });
   }
 });
 
