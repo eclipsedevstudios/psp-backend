@@ -1805,6 +1805,15 @@ app.post("/generate_report_staff_mindset", (req, res) => {
   }
 });
 
+app.post("/generate_report_mindset_athlete", (req, res) => {
+  console.log(
+    "Webhook listener received for Mindset Athlete Report - request body:"
+  );
+  console.log(req.body);
+
+  // Send a 200 status code to acknowledge receiving the webhook
+  res.status(200).end();
+});
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
