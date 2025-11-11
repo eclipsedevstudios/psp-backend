@@ -15,6 +15,7 @@ const {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { WebClient } = require("@slack/web-api");
@@ -26,13 +27,25 @@ const QUALTRICS_ADULT_MINDSET_SURVEY_ID = "SV_5zNrXkf1Z4ozvRs";
 const QUALTRICS_YOUTH_MINDSET_SURVEY_ID = "SV_afqUZdlh3nKp3wi";
 const QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID = "SV_0q7oaLHkRcDjPp4";
 const QUALTRICS_STAFF_MINDSET_SURVEY_ID = "SV_429WRg8lEN9jseW";
+const QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID = "SV_2bhsUmd6NTDPUii";
 const QUALTRICS_HOCKEY_CODE = "Hockey";
+const MINDBALANCE_BUCKET_NAME =
+  "psp-mindbalance-assesment-report-test"
+const MINDSET_TEST_RECIPIENT =
+  process.env.MINDSET_TEST_EMAIL ;
+
+
 
 // Qualtrics sends POST of x-www-form-urlencoded data
 app.use(express.urlencoded({ extended: true }));
 
 // Must keep this synced with the port defined in fly.toml
 const port = 8080;
+const REPORT_BASE_URL =
+  process.env.REPORT_BASE_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://psp-backend.fly.dev"
+    : `http://localhost:${port}`);
 
 app.use((req, res, next) => {
   // Note: Set other allowed origins here
@@ -336,13 +349,49 @@ const generatePdfReport = async (reportUrl, responseId) => {
   console.log("Successfully generated PDF report");
 };
 
+// File tracking for MindBalance test PDFs
+const MINDBALANCE_TRACKING_FILE = "mindbalance_test_files.json";
+
+// const saveMindBalanceFile = (fileName, bucketName) => {
+//   try {
+//     let files = [];
+//     if (fs.existsSync(MINDBALANCE_TRACKING_FILE)) {
+//       const fileContent = fs.readFileSync(MINDBALANCE_TRACKING_FILE, "utf8");
+//       files = JSON.parse(fileContent);
+//     }
+//     
+//     const fileEntry = {
+//       fileName,
+//       bucketName,
+//       uploadedAt: new Date().toISOString(),
+//     };
+//     
+//     // Check if file already exists to avoid duplicates
+//     if (!files.some((f) => f.fileName === fileName)) {
+//       files.push(fileEntry);
+//       fs.writeFileSync(
+//         MINDBALANCE_TRACKING_FILE,
+//         JSON.stringify(files, null, 2)
+//       );
+//       console.log(`Saved file ${fileName} to tracking file`);
+//     }
+//   } catch (error) {
+//     console.error("Error saving file to tracking:", error);
+//   }
+// };
+
 const uploadToS3 = async (surveyId, responseId) => {
   const REGION = "us-east-1";
   const s3Client = new S3Client({
     region: REGION,
+    // credentials: {
+    //   accessKeyId: process.env.AWS_ACCESS_KEY,
+    //   secretAccessKey: process.env.AWS_SECRET_KEY,
+    // },
   });
 
   let BUCKET_NAME = "";
+  console.log("___S#___UPLOAD___SURVEY_ID___", surveyId)
   if (surveyId === QUALTRICS_ADULT_MINDSET_SURVEY_ID) {
     BUCKET_NAME = "psp-mindset-assessment-reports";
   } else if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID) {
@@ -351,6 +400,8 @@ const uploadToS3 = async (surveyId, responseId) => {
     BUCKET_NAME = "psp-mindset-assessment-reports-staff";
   } else if (surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID) {
     BUCKET_NAME = "psp-mindset-assessment-reports-youth-golf";
+  } else if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
+    BUCKET_NAME = MINDBALANCE_BUCKET_NAME;
   }
   const OBJECT_NAME = `psp-mindset-assessment-report-${responseId}.pdf`;
   const fileContent = fs.readFileSync(
@@ -367,6 +418,11 @@ const uploadToS3 = async (surveyId, responseId) => {
   console.log(`Beginning upload of ${OBJECT_NAME} to S3...`);
   await s3Client.send(putObjectCommand);
 
+  // Track file if it's a MindBalance test file
+  // if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
+  //   saveMindBalanceFile(OBJECT_NAME, BUCKET_NAME);
+  // }
+
   const getObjectParams = {
     Bucket: BUCKET_NAME,
     Key: OBJECT_NAME,
@@ -378,6 +434,114 @@ const uploadToS3 = async (surveyId, responseId) => {
     expiresIn: 604800,
   });
   return url;
+};
+
+// Map provider names to their email addresses
+const getProviderEmail = (providerName) => {
+  // return MINDSET_TEST_RECIPIENT;
+  if (!providerName) {
+    return process.env.MINDSET_TEST_EMAIL || null;
+  }
+
+  switch (providerName.trim()) {
+    case "Dr. Brenna Chirby":
+      return "bchirby@mindbalancesport.com";
+    case "Dr. Virginia Jones":
+      return "virginiajones@mindbalancesport.com";
+    case "Dr. Nancy Marin":
+      return "nancy@marinpsychologyassociates.com";
+    case "Paula Castro":
+      return "Paulacastro@mindbalancesport.com";
+    case "John Howard":
+      return "johnhoward@mindbalancesport.com";
+    case "Raven Gerald":
+      return "ravengerald@mindbalancesport.com";
+    case "Junko Araki":
+      return "junkoaraki@mindbalancesport.com";
+    case "Brady Dinnsen":
+      return "Bradydinnsen@mindbalancesport.com";
+    default:
+      console.warn(`Unknown provider name: ${providerName}. Using fallback email.`);
+      return process.env.MINDSET_TEST_EMAIL || null;
+  }
+};
+
+const sendMindsetAthleteTestEmail = async ({
+  athleteName,
+  providerName,
+  reportUrl,
+}) => {
+  const safeAthleteName = athleteName || "Your athlete";
+  const safeProviderName = providerName ? ` (${providerName})` : "";
+
+  // Get the recipient email based on provider name
+  const recipientEmail = getProviderEmail(providerName);
+  
+  if (!recipientEmail) {
+    throw new Error(`No email address found for provider: ${providerName || "unknown"}`);
+  }
+
+  const html = `
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mindset Assessment Report Ready</title>
+  </head>
+  <body style="background-color: #f6f6f6; font-family: Arial, sans-serif; margin: 0; padding: 0;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f6f6f6; padding: 30px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; padding: 30px;">
+            <tr>
+              <td style="font-size: 16px; color: #1f1f1f; line-height: 1.5;">
+                <p style="margin-top: 0;">Hello${safeProviderName},</p>
+                <p>Your client ${safeAthleteName} has completed the Mindset Assessment for athletes. This assessment is designed to assess their behaviors, thoughts, and feelings related to their wellness and development as an athlete. It is also an important step on the road to improved mental performance.</p>
+                <p>Please use the link below to download their report. This report will show their scores and how they compare to other athletes at their level.</p>
+                <p style="margin: 30px 0;">
+                  <a href="${reportUrl}" style="background-color: #2c7be5; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 4px; display: inline-block;">Download Report</a>
+                </p>
+                <p>If you have any issues accessing the report, reply to this email and we'll help you out.</p>
+                <p style="margin-bottom: 0;">Thanks,<br/>Premier Sport Psychology</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  const text = `Hello${safeProviderName},
+
+Your client ${safeAthleteName} has completed the Mindset Assessment for athletes. This assessment is designed to assess their behaviors, thoughts, and feelings related to their wellness and development as an athlete. It is also an important step on the road to improved mental performance.
+
+Please download their report here: ${reportUrl}
+
+If you have any issues accessing the report, reply to this email and we'll help you out.
+
+Thanks,
+Premier Sport Psychology`;
+
+  const data = {
+    from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
+    to: recipientEmail,
+    subject: `Mindset Assessment Report for ${safeAthleteName}`,
+    html,
+    text,
+  };
+
+  return new Promise((resolve, reject) => {
+    mailgun.messages().send(data, (error, body) => {
+      if (error) {
+        reject(error);
+      } else {
+        console.log(`Email sent to ${recipientEmail} for provider ${providerName || "unknown"}:`, body);
+        resolve(body);
+      }
+    });
+  });
 };
 
 const emailReport = async (
@@ -1805,15 +1969,188 @@ app.post("/generate_report_staff_mindset", (req, res) => {
   }
 });
 
-app.post("/generate_report_mindset_athlete", (req, res) => {
+app.post("/generate_report_mindset_athlete", async (req, res) => {
   console.log(
     "Webhook listener received for Mindset Athlete Report - request body:"
   );
   console.log(req.body);
 
-  // Send a 200 status code to acknowledge receiving the webhook
-  res.status(200).end();
+  const body = req.body || {};
+  const responseId =
+    body.ResponseID ||
+    body.responseId ||
+    body.test?.toString()?.trim() ||
+    `mindset-${Date.now()}`;
+  const surveyId =
+    body.SurveyID || body.surveyId || QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID;
+  const providerName =
+    body.providerName ||
+    body.provider ||
+    body.provider_name ||
+    "";
+  const athleteName =
+    body.athleteName ||
+    body.clientName ||
+    body.playerName ||
+    body.athlete ||
+    body["q://QID9/ChoiceTextEntryValue"] ||
+    "";
+
+  try {
+    const urlParams = new URLSearchParams();
+    Object.entries(body).forEach(([key, value]) => {
+      if (value === undefined || value === null) {
+        return;
+      }
+
+      if (Array.isArray(value)) {
+        value.forEach((entry) => {
+          urlParams.append(key, entry);
+        });
+      } else if (typeof value === "object") {
+        urlParams.append(key, JSON.stringify(value));
+      } else {
+        urlParams.append(key, value);
+      }
+    });
+
+    urlParams.set("reportOnly", "true");
+
+    const normalizedBaseUrl = REPORT_BASE_URL.endsWith("/")
+      ? REPORT_BASE_URL.slice(0, -1)
+      : REPORT_BASE_URL;
+    const reportUrl = `${normalizedBaseUrl}/mindset/?${urlParams.toString()}`;
+
+    console.log(`Generating Mindset Athlete report from ${reportUrl}`);
+    await generatePdfReport(reportUrl, responseId);
+
+    const s3ReportUrl = await uploadToS3(surveyId, responseId);
+    console.log(
+      `Successful upload of Mindset Athlete report. Presigned URL: ${s3ReportUrl}`
+    );
+
+    await sendMindsetAthleteTestEmail({
+      athleteName,
+      providerName,
+      reportUrl: s3ReportUrl,
+    });
+    try {
+      await postToSlack(
+        `*Email with report delivered (Mindset Athlete Test):*\n\nResponse ID: ${responseId}\nRecipient: ${MINDSET_TEST_RECIPIENT}\nReport URL: ${s3ReportUrl}`
+      );
+    } catch (slackError) {
+      console.warn("Failed to post Slack notification:", slackError.message);
+    }
+
+    res.status(200).json({ success: true, reportUrl: s3ReportUrl });
+  } catch (error) {
+    console.error("Failed to process Mindset Athlete report:", error);
+    try {
+      await postToSlack(
+        `*Failed to process Mindset Athlete report:*\n\nResponse ID: ${responseId}\nError: ${error.message}`
+      );
+    } catch (slackError) {
+      console.warn("Failed to post Slack notification:", slackError.message);
+    }
+    res.status(500).json({
+      error: "Failed to process Mindset Athlete report",
+      details: error.message,
+    });
+  }
 });
+
+// DELETE endpoint to clean up MindBalance test files from S3
+// app.delete("/cleanup-mindbalance-files", async (req, res) => {
+//   try {
+//     const REGION = "us-east-1";
+//     const s3Client = new S3Client({
+//       region: REGION,
+//       credentials: {
+//         accessKeyId: process.env.AWS_ACCESS_KEY,
+//         secretAccessKey: process.env.AWS_SECRET_KEY,
+//       },
+//     });
+
+//     // Read tracking file
+//     if (!fs.existsSync(MINDBALANCE_TRACKING_FILE)) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No tracking file found. No files to delete.",
+//       });
+//     }
+
+//     const fileContent = fs.readFileSync(MINDBALANCE_TRACKING_FILE, "utf8");
+//     const files = JSON.parse(fileContent);
+
+//     if (files.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "Tracking file is empty. No files to delete.",
+//         deletedCount: 0,
+//       });
+//     }
+
+//     const deletedFiles = [];
+//     const failedFiles = [];
+
+//     // Delete each file from S3
+//     for (const fileEntry of files) {
+//       try {
+//         const deleteParams = {
+//           Bucket: fileEntry.bucketName,
+//           Key: fileEntry.fileName,
+//         };
+
+//         const deleteCommand = new DeleteObjectCommand(deleteParams);
+//         await s3Client.send(deleteCommand);
+//         deletedFiles.push(fileEntry.fileName);
+//         console.log(`Successfully deleted ${fileEntry.fileName} from S3`);
+//       } catch (error) {
+//         console.error(`Failed to delete ${fileEntry.fileName}:`, error);
+//         failedFiles.push({
+//           fileName: fileEntry.fileName,
+//           error: error.message,
+//         });
+//       }
+//     }
+
+//     // Clear the tracking file after successful deletions
+//     if (failedFiles.length === 0) {
+//       fs.writeFileSync(MINDBALANCE_TRACKING_FILE, JSON.stringify([], null, 2));
+//       console.log("Tracking file cleared");
+//     } else {
+//       // Only remove successfully deleted files from tracking
+//       const remainingFiles = files.filter(
+//         (f) => !deletedFiles.includes(f.fileName)
+//       );
+//       fs.writeFileSync(
+//         MINDBALANCE_TRACKING_FILE,
+//         JSON.stringify(remainingFiles, null, 2)
+//       );
+//       console.log(
+//         `Tracking file updated. ${remainingFiles.length} files remaining.`
+//       );
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: `Cleanup completed. ${deletedFiles.length} file(s) deleted.`,
+//       deletedCount: deletedFiles.length,
+//       deletedFiles: deletedFiles,
+//       failedCount: failedFiles.length,
+//       failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
+//     });
+//   } catch (error) {
+//     console.error("Error during cleanup:", error);
+//     res.status(500).json({
+//       success: false,
+//       error: "Failed to cleanup files",
+//       details: error.message,
+//     });
+//   }
+// });
+
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+

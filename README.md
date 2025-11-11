@@ -34,25 +34,90 @@ The server expects the following environment variables (see `.env`):
 - `MAILGUN_API_KEY` - Mailgun API key for sending emails
 - `SLACK_API_TOKEN` - Slack API token for posting notifications
 - `QUALTRICS_API_TOKEN` - Qualtrics API token for fetching survey responses
-- (Other AWS credentials may be required for S3 access)
+- `AWS_ACCESS_KEY_ID` - AWS access key ID for S3 uploads (optional if using AWS credentials file)
+- `AWS_SECRET_ACCESS_KEY` - AWS secret access key for S3 uploads (optional if using AWS credentials file)
+- `AWS_REGION` - AWS region (defaults to `us-east-1` if not set)
 
-## Running Locally
+## Setup Instructions
 
-1. Install dependencies:
+### Prerequisites
+
+- **Node.js** (version 16 or higher recommended, as per Dockerfile)
+- **npm** (comes with Node.js)
+- **Playwright browsers** (will be installed automatically)
+
+### Step-by-Step Setup
+
+1. **Install dependencies:**
 
     ```sh
     npm install
     ```
 
-2. Set up your `.env` file with the required secrets.
+2. **Install Playwright browsers:**
 
-3. Start the server:
+    ```sh
+    npx playwright install
+    ```
+
+    This installs the Chromium browser needed for PDF generation.
+
+3. **Create a `.env` file:**
+
+    Create a `.env` file in the root directory with the following variables:
+
+    ```env
+    MAILGUN_API_KEY=your_mailgun_api_key_here
+    SLACK_API_TOKEN=your_slack_api_token_here
+    QUALTRICS_API_TOKEN=your_qualtrics_api_token_here
+    AWS_ACCESS_KEY_ID=your_aws_access_key_id_here
+    AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key_here
+    AWS_REGION=us-east-1
+    ```
+
+    **Note:** If you have AWS credentials configured via `~/.aws/credentials` or AWS IAM roles, you can omit the AWS environment variables.
+
+4. **Ensure the `output` directory exists:**
+
+    The `output` directory should already exist, but if it doesn't, create it:
+
+    ```sh
+    mkdir output
+    ```
+
+    This directory stores generated PDF reports before they're uploaded to S3.
+
+5. **Start the server:**
 
     ```sh
     npm start
     ```
 
-4. The server will listen on port 8080 (as configured in [fly.toml](fly.toml)).
+6. **Verify the server is running:**
+
+    The server will listen on port 8080. You should see:
+    ```
+    Server listening on port 8080
+    ```
+
+    You can access the frontend at `http://localhost:8080`
+
+### Testing the Setup
+
+- The server serves the React frontend from the `build` directory
+- Webhook endpoints are available at:
+  - `POST /generate_report` - Adult Mindset Report
+  - `POST /generate_report_youth_mindset` - Youth Mindset Report
+  - `POST /generate_report_youth_golf_mindset` - Youth Golf Mindset Report
+  - `POST /generate_report_staff_mindset` - Staff Mindset Report
+
+### Troubleshooting
+
+- **Playwright issues:** Make sure you've run `npx playwright install` after `npm install`
+- **Missing dependencies:** Delete `node_modules` and `package-lock.json`, then run `npm install` again
+- **Port already in use:** Change the port in `index.js` (line 35) and `fly.toml` if needed
+- **AWS S3 errors:** Verify your AWS credentials have permissions to upload to the S3 buckets
+- **Environment variables not loading:** Ensure your `.env` file is in the root directory and uses the correct variable names
 
 ## Deployment
 

@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/static/css/main.d21d2f0e.css",
-    "main.js": "/static/js/main.052f6d75.js",
+    "main.js": "/static/js/main.74e07e27.js",
     "static/media/cover_es.png": "/static/media/cover_es.1f6e065b252444c68610.png",
     "static/media/cover.png": "/static/media/cover.90a064950691984229aa.png",
     "static/media/cover_staff.png": "/static/media/cover_staff.34c7099ac300c855c74d.png",
@@ -12,10 +12,15 @@
     "static/media/wrap-up.png": "/static/media/wrap-up.691baa9aa4c7afaa3c4d.png",
     "static/media/wrap-up-youth.png": "/static/media/wrap-up-youth.dded6483af9702e28ab1.png",
     "static/media/cover-background-gradient.jpg": "/static/media/cover-background-gradient.1bd9f9a65bd273ebc6e6.jpg",
+    "static/media/cover_mindset_balance_sport.png": "/static/media/cover_mindset_balance_sport.53bf7994d1784ec23188.png",
+    "static/media/mindset_balance_assessment.png": "/static/media/mindset_balance_assessment.bb4d28f19f6dbf2d662a.png",
+    "static/media/mind_balance_clusters.png": "/static/media/mind_balance_clusters.86fc9a39fc23614d60f7.png",
     "static/media/mindset_institute.png": "/static/media/mindset_institute.1315bd5cd1d78cda2b43.png",
     "static/media/health_habits.png": "/static/media/health_habits.41aadabad9a0bfedbc53.png",
+    "static/media/mind_balance_wrapup_2.png": "/static/media/mind_balance_wrapup_2.186d98ff0b39f9114a62.png",
     "static/media/self_reflection.png": "/static/media/self_reflection.85796a7f8e33683d3308.png",
     "static/media/mindset_program.png": "/static/media/mindset_program.b9f78749c8e6dbe9cf11.png",
+    "static/media/mind_balance_wrapup_1.png": "/static/media/mind_balance_wrapup_1.d6aad3fcc05a54904b76.png",
     "static/media/growth_mindset.png": "/static/media/growth_mindset.f3374086123e01e2219a.png",
     "static/media/mental_skills.png": "/static/media/mental_skills.547ac1d07816ca4369fc.png",
     "static/media/team_support.png": "/static/media/team_support.5f1364f17c065db23094.png",
@@ -35,10 +40,10 @@
     "static/media/email.png": "/static/media/email.c496dd28e66e8a3fc5af.png",
     "index.html": "/index.html",
     "main.d21d2f0e.css.map": "/static/css/main.d21d2f0e.css.map",
-    "main.052f6d75.js.map": "/static/js/main.052f6d75.js.map"
+    "main.74e07e27.js.map": "/static/js/main.74e07e27.js.map"
   },
   "entrypoints": [
     "static/css/main.d21d2f0e.css",
-    "static/js/main.052f6d75.js"
+    "static/js/main.74e07e27.js"
   ]
 }
