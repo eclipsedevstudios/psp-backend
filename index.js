@@ -419,9 +419,9 @@ const uploadToS3 = async (surveyId, responseId) => {
   await s3Client.send(putObjectCommand);
 
   // Track file if it's a MindBalance test file
-  // if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
-  //   saveMindBalanceFile(OBJECT_NAME, BUCKET_NAME);
-  // }
+  if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
+    saveMindBalanceFile(OBJECT_NAME, BUCKET_NAME);
+  }
 
   const getObjectParams = {
     Bucket: BUCKET_NAME,
@@ -1995,6 +1995,8 @@ app.post("/generate_report_mindset_athlete", async (req, res) => {
     body.athlete ||
     body["q://QID9/ChoiceTextEntryValue"] ||
     "";
+  const recordedDateParam =
+    body.recordedDate ?? body.date ?? body.CompletedDate ?? body.completedDate;
 
   try {
     const urlParams = new URLSearchParams();
@@ -2007,12 +2009,28 @@ app.post("/generate_report_mindset_athlete", async (req, res) => {
         value.forEach((entry) => {
           urlParams.append(key, entry);
         });
+      } else if (value instanceof Date) {
+        urlParams.append(key, value.toISOString());
       } else if (typeof value === "object") {
         urlParams.append(key, JSON.stringify(value));
       } else {
         urlParams.append(key, value);
       }
     });
+
+    if (
+      recordedDateParam !== undefined &&
+      recordedDateParam !== null &&
+      recordedDateParam !== ""
+    ) {
+      urlParams.delete("date");
+      urlParams.set("recordedDate", recordedDateParam);
+    }
+
+    if (athleteName) {
+      urlParams.set("athleteName", athleteName);
+      urlParams.delete("clientName");
+    }
 
     urlParams.set("reportOnly", "true");
 
