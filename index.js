@@ -350,7 +350,7 @@ const generatePdfReport = async (reportUrl, responseId) => {
 };
 
 // File tracking for MindBalance test PDFs
-const MINDBALANCE_TRACKING_FILE = "mindbalance_test_files.json";
+// const MINDBALANCE_TRACKING_FILE = "mindbalance_test_files.json";
 
 // const saveMindBalanceFile = (fileName, bucketName) => {
 //   try {
@@ -382,13 +382,19 @@ const MINDBALANCE_TRACKING_FILE = "mindbalance_test_files.json";
 
 const uploadToS3 = async (surveyId, responseId) => {
   const REGION = "us-east-1";
-  const s3Client = new S3Client({
+  const s3ClientConfig = {
     region: REGION,
-    // credentials: {
-    //   accessKeyId: process.env.AWS_ACCESS_KEY,
-    //   secretAccessKey: process.env.AWS_SECRET_KEY,
-    // },
-  });
+  };
+  
+  // Only use explicit credentials for MindBalance surveys
+  if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
+    s3ClientConfig.credentials = {
+      accessKeyId: process.env.DEV_AWS_ACCESS_KEY,
+      secretAccessKey: process.env.DEV_AWS_SECRET_KEY,
+    };
+  }
+  
+  const s3Client = new S3Client(s3ClientConfig);
 
   let BUCKET_NAME = "";
   console.log("___S#___UPLOAD___SURVEY_ID___", surveyId)
@@ -419,9 +425,9 @@ const uploadToS3 = async (surveyId, responseId) => {
   await s3Client.send(putObjectCommand);
 
   // Track file if it's a MindBalance test file
-  if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
-    saveMindBalanceFile(OBJECT_NAME, BUCKET_NAME);
-  }
+  // if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
+  //   saveMindBalanceFile(OBJECT_NAME, BUCKET_NAME);
+  // }
 
   const getObjectParams = {
     Bucket: BUCKET_NAME,
