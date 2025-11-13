@@ -472,7 +472,7 @@ const getProviderEmail = (providerName) => {
   }
 };
 
-const sendMindsetAthleteTestEmail = async ({
+const sendMindsetAthleteEmail = async ({
   athleteName,
   providerName,
   reportUrl,
@@ -2053,7 +2053,7 @@ app.post("/generate_report_mindset_athlete", async (req, res) => {
       `Successful upload of Mindset Athlete report. Presigned URL: ${s3ReportUrl}`
     );
 
-    await sendMindsetAthleteTestEmail({
+    await sendMindsetAthleteEmail({
       athleteName,
       providerName,
       reportUrl: s3ReportUrl,
