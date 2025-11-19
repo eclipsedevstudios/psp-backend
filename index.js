@@ -136,6 +136,12 @@ const getQualtricsResponse = async (surveyId, responseId) => {
         const selfReflectionPercentileCollege = data.SRColComparison;
         const selfReflectionPercentilePro = data.SRProComparison;
 
+        const growthMindsetScore = data.GrowthScore;
+        const mentalSkillsScore = data.MentalSkills;
+        const teamSupportScore = data.Team;
+        const healthHabitsScore = data.HealthHabits;
+        const selfReflectionScore = data.SelfReflection;
+
         // const slackMessage = `*New Qualtrics response fetched:*\n\nSurvey ID: ${surveyId}\nResponse ID: ${responseId}\nLevel: ${level}\n\nGrowth Mindset Percentile: ${growthMindsetPercentile}\nMental Skills Percentile: ${mentalSkillsPercentile}\nTeam Support Percentile: ${teamSupportPercentile}\nHealth Habits Percentile: ${healthHabitsPercentile}\nSelf Reflection Percentile: ${selfReflectionPercentile}\n`;
         // postToSlack(slackMessage);
 
@@ -1638,11 +1644,11 @@ app.post("/generate_report", (req, res) => {
             postToSlack(slackMessage);
           });
       })
-      .catch((error) => {
-        console.error(error);
-        const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
-        postToSlack(slackMessage);
-      });
+        .catch((error) => {
+          console.error(error);
+          const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+          postToSlack(slackMessage);
+        });
   }
 });
 
