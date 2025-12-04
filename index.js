@@ -29,12 +29,8 @@ const QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID = "SV_0q7oaLHkRcDjPp4";
 const QUALTRICS_STAFF_MINDSET_SURVEY_ID = "SV_429WRg8lEN9jseW";
 const QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID = "SV_2bhsUmd6NTDPUii";
 const QUALTRICS_HOCKEY_CODE = "Hockey";
-const MINDBALANCE_BUCKET_NAME =
-  "psp-mindbalance-assesment-report-test"
-const MINDSET_TEST_RECIPIENT =
-  process.env.MINDSET_TEST_EMAIL ;
-
-
+const MINDBALANCE_BUCKET_NAME = "psp-mindbalance-assesment-report-test";
+const MINDSET_TEST_RECIPIENT = process.env.MINDSET_TEST_EMAIL;
 
 // Qualtrics sends POST of x-www-form-urlencoded data
 app.use(express.urlencoded({ extended: true }));
@@ -365,13 +361,13 @@ const generatePdfReport = async (reportUrl, responseId) => {
 //       const fileContent = fs.readFileSync(MINDBALANCE_TRACKING_FILE, "utf8");
 //       files = JSON.parse(fileContent);
 //     }
-//     
+//
 //     const fileEntry = {
 //       fileName,
 //       bucketName,
 //       uploadedAt: new Date().toISOString(),
 //     };
-//     
+//
 //     // Check if file already exists to avoid duplicates
 //     if (!files.some((f) => f.fileName === fileName)) {
 //       files.push(fileEntry);
@@ -391,7 +387,7 @@ const uploadToS3 = async (surveyId, responseId) => {
   const s3ClientConfig = {
     region: REGION,
   };
-  
+
   // Only use explicit credentials for MindBalance surveys
   if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
     s3ClientConfig.credentials = {
@@ -399,11 +395,11 @@ const uploadToS3 = async (surveyId, responseId) => {
       secretAccessKey: process.env.DEV_AWS_SECRET_KEY,
     };
   }
-  
+
   const s3Client = new S3Client(s3ClientConfig);
 
   let BUCKET_NAME = "";
-  console.log("___S#___UPLOAD___SURVEY_ID___", surveyId)
+  console.log("___S#___UPLOAD___SURVEY_ID___", surveyId);
   if (surveyId === QUALTRICS_ADULT_MINDSET_SURVEY_ID) {
     BUCKET_NAME = "psp-mindset-assessment-reports";
   } else if (surveyId === QUALTRICS_YOUTH_MINDSET_SURVEY_ID) {
@@ -416,9 +412,8 @@ const uploadToS3 = async (surveyId, responseId) => {
     BUCKET_NAME = MINDBALANCE_BUCKET_NAME;
   }
   const OBJECT_NAME = `psp-mindset-assessment-report-${responseId}.pdf`;
-  const fileContent = fs.readFileSync(
-    `output/psp-mindset-assessment-report-${responseId}.pdf`
-  );
+  const filePath = `output/psp-mindset-assessment-report-${responseId}.pdf`;
+  const fileContent = fs.readFileSync(filePath);
 
   const putObjectParams = {
     Bucket: BUCKET_NAME,
@@ -445,11 +440,29 @@ const uploadToS3 = async (surveyId, responseId) => {
   const url = await getSignedUrl(s3Client, getObjectCommand, {
     expiresIn: 604800,
   });
+
+  // Clean up local file after successful upload
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`Successfully deleted local file: ${filePath}`);
+    }
+  } catch (error) {
+    // Log error but don't throw - cleanup failure shouldn't break the flow
+    console.error(`Failed to delete local file ${filePath}:`, error);
+  }
+
   return url;
 };
 
 // Map provider names to their email addresses
 const getProviderEmail = (providerName) => {
+  console.log(
+    "___PROVIDER_NAME___",
+    providerName,
+    providerName === "Dr. Nancy Marin"
+  );
+  // return "kumail@expedey.com"
   // return MINDSET_TEST_RECIPIENT;
   if (!providerName) {
     return process.env.MINDSET_TEST_EMAIL || null;
@@ -473,7 +486,9 @@ const getProviderEmail = (providerName) => {
     case "Brady Dinnsen":
       return "Bradydinnsen@mindbalancesport.com";
     default:
-      console.warn(`Unknown provider name: ${providerName}. Using fallback email.`);
+      console.warn(
+        `Unknown provider name: ${providerName}. Using fallback email.`
+      );
       return process.env.MINDSET_TEST_EMAIL || null;
   }
 };
@@ -488,9 +503,11 @@ const sendMindsetAthleteEmail = async ({
 
   // Get the recipient email based on provider name
   const recipientEmail = getProviderEmail(providerName);
-  
+  console.log("___RECIPIENT_EMAIL___", recipientEmail);
   if (!recipientEmail) {
-    throw new Error(`No email address found for provider: ${providerName || "unknown"}`);
+    throw new Error(
+      `No email address found for provider: ${providerName || "unknown"}`
+    );
   }
 
   const html = `
@@ -549,7 +566,12 @@ Premier Sport Psychology`;
       if (error) {
         reject(error);
       } else {
-        console.log(`Email sent to ${recipientEmail} for provider ${providerName || "unknown"}:`, body);
+        console.log(
+          `Email sent to ${recipientEmail} for provider ${
+            providerName || "unknown"
+          }:`,
+          body
+        );
         resolve(body);
       }
     });
@@ -1644,11 +1666,11 @@ app.post("/generate_report", (req, res) => {
             postToSlack(slackMessage);
           });
       })
-        .catch((error) => {
-          console.error(error);
-          const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
-          postToSlack(slackMessage);
-        });
+      .catch((error) => {
+        console.error(error);
+        const slackMessage = `*Failed to fetch Qualtrics response:*\n\nResponse ID: ${responseId}\nEmail: ${email}`;
+        postToSlack(slackMessage);
+      });
   }
 });
 
@@ -1996,10 +2018,7 @@ app.post("/generate_report_mindset_athlete", async (req, res) => {
   const surveyId =
     body.SurveyID || body.surveyId || QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID;
   const providerName =
-    body.providerName ||
-    body.provider ||
-    body.provider_name ||
-    "";
+    body.providerName || body.provider || body.provider_name || "";
   const athleteName =
     body.athleteName ||
     body.clientName ||
@@ -2183,4 +2202,3 @@ app.post("/generate_report_mindset_athlete", async (req, res) => {
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
-
