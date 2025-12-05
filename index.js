@@ -387,7 +387,6 @@ const uploadToS3 = async (surveyId, responseId) => {
   const s3ClientConfig = {
     region: REGION,
   };
-
   // Only use explicit credentials for MindBalance surveys
   if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
     s3ClientConfig.credentials = {
