@@ -2107,6 +2107,16 @@ app.post("/generate_report_mindset_athlete", async (req, res) => {
   }
 });
 
+app.post("/generate_report_mindset_athlete_adult", (req, res) => {
+  console.log(
+    "Webhook listener received for Mindset Athlete Adult Report - request body:"
+  );
+  console.log(req.body);
+
+  // Send a 200 status code to acknowledge receiving the webhook
+  res.status(200).end();
+});
+
 // DELETE endpoint to clean up MindBalance test files from S3
 // app.delete("/cleanup-mindbalance-files", async (req, res) => {
 //   try {
