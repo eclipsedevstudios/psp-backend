@@ -28,6 +28,7 @@ const QUALTRICS_YOUTH_MINDSET_SURVEY_ID = "SV_afqUZdlh3nKp3wi";
 const QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID = "SV_0q7oaLHkRcDjPp4";
 const QUALTRICS_STAFF_MINDSET_SURVEY_ID = "SV_429WRg8lEN9jseW";
 const QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID = "SV_2bhsUmd6NTDPUii";
+const QUALTRICS_MINDSET_ATHLETE_ADULT_SURVEY_ID = "SV_e96qQSt9GsYinHw";
 const QUALTRICS_HOCKEY_CODE = "Hockey";
 const MINDBALANCE_BUCKET_NAME = "psp-mindbalance-assesment-report-test";
 const MINDSET_TEST_RECIPIENT = process.env.MINDSET_TEST_EMAIL;
@@ -255,6 +256,85 @@ const getQualtricsResponse = async (surveyId, responseId) => {
         console.log(result);
 
         return result;
+      } else if (surveyId === QUALTRICS_MINDSET_ATHLETE_ADULT_SURVEY_ID) {
+        const data = res.data.result.values;
+        const labels = res.data.result.labels || {};
+        
+        const athleteName = data.QID9_TEXT;
+        const email = data.QID12_TEXT;
+        const recordedDate = data.recordedDate;
+        const level = data.Level;
+        const age = data.QID13_TEXT;
+        
+        // Convert QID11 array to comma-separated string
+        const providerNameArray = labels.QID11 || [];
+        const providerName = Array.isArray(providerNameArray) 
+          ? providerNameArray.join(", ") 
+          : providerNameArray;
+        
+        const language = data.userLanguage || data.Q_Language || "EN";
+
+        // Extract cluster data - data uses PP for Performance (Mental Skills) and MP for Mental (Wellness Accountability)
+        // Frontend expects PP for Mental Skills and MP for Wellness Accountability (mapping is correct)
+        const growthMindsetScore = data.GrowthScore;
+        const growthMindsetPercentile = data.GP;
+        const growthMindsetPercentilePro = data.GMProComparison;
+        const growthMindsetPercentileCollege = data.GMColComparison;
+
+        const mentalSkillsScore = data.MentalSkills;
+        const mentalSkillsPercentile = data.PP; // Data has PP for Performance (Mental Skills), frontend expects PP
+        const mentalSkillsPercentilePro = data.MSProComparison;
+        const mentalSkillsPercentileCollege = data.MSColComparison;
+
+        const teamSupportScore = data.Team;
+        const teamSupportPercentile = data.TP;
+        const teamSupportPercentilePro = data.TSProComparison;
+        const teamSupportPercentileCollege = data.TSColComparison;
+
+        const healthHabitsScore = data.HealthHabits;
+        const healthHabitsPercentile = data.PhP;
+        const healthHabitsPercentilePro = data.HHProComparison;
+        const healthHabitsPercentileCollege = data.HHColComparison;
+
+        const wellnessAccountabilityScore = data.SelfReflection;
+        const wellnessAccountabilityPercentile = data.MP; // Data has MP for Mental (Wellness Accountability), frontend expects MP
+        const wellnessAccountabilityPercentilePro = data.SRProComparison;
+        const wellnessAccountabilityPercentileCollege = data.SRColComparison;
+
+        const result = {
+          athleteName,
+          email,
+          recordedDate,
+          level,
+          age,
+          providerName,
+          language,
+          growthMindsetScore,
+          growthMindsetPercentile,
+          growthMindsetPercentilePro,
+          growthMindsetPercentileCollege,
+          mentalSkillsScore,
+          mentalSkillsPercentile,
+          mentalSkillsPercentilePro,
+          mentalSkillsPercentileCollege,
+          teamSupportScore,
+          teamSupportPercentile,
+          teamSupportPercentilePro,
+          teamSupportPercentileCollege,
+          healthHabitsScore,
+          healthHabitsPercentile,
+          healthHabitsPercentilePro,
+          healthHabitsPercentileCollege,
+          wellnessAccountabilityScore,
+          wellnessAccountabilityPercentile,
+          wellnessAccountabilityPercentilePro,
+          wellnessAccountabilityPercentileCollege,
+        };
+
+        console.log("Successfully fetched Qualtrics data - returning:");
+        console.log(result);
+
+        return result;
       }
     })
     .catch((error) => {
@@ -388,7 +468,7 @@ const uploadToS3 = async (surveyId, responseId) => {
     region: REGION,
   };
   // Only use explicit credentials for MindBalance surveys
-  if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
+  if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID || surveyId === QUALTRICS_MINDSET_ATHLETE_ADULT_SURVEY_ID) {
     s3ClientConfig.credentials = {
       accessKeyId: process.env.DEV_AWS_ACCESS_KEY,
       secretAccessKey: process.env.DEV_AWS_SECRET_KEY,
@@ -407,7 +487,7 @@ const uploadToS3 = async (surveyId, responseId) => {
     BUCKET_NAME = "psp-mindset-assessment-reports-staff";
   } else if (surveyId === QUALTRICS_YOUTH_MINDSET_GOLF_SURVEY_ID) {
     BUCKET_NAME = "psp-mindset-assessment-reports-youth-golf";
-  } else if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID) {
+  } else if (surveyId === QUALTRICS_MINDBALANCE_MINDSET_SURVEY_ID || surveyId === QUALTRICS_MINDSET_ATHLETE_ADULT_SURVEY_ID) {
     BUCKET_NAME = MINDBALANCE_BUCKET_NAME;
   }
   const OBJECT_NAME = `psp-mindset-assessment-report-${responseId}.pdf`;
@@ -490,6 +570,114 @@ const getProviderEmail = (providerName) => {
       );
       return process.env.MINDSET_TEST_EMAIL || null;
   }
+};
+
+const sendMindsetAthleteAdultEmailToProviders = async ({
+  athleteName,
+  providerNames,
+  reportUrl,
+}) => {
+  const safeAthleteName = athleteName || "Your athlete";
+  
+  // Split provider names if it's a comma-separated string
+  const providerArray = typeof providerNames === 'string' 
+    ? providerNames.split(',').map(p => p.trim()).filter(p => p)
+    : Array.isArray(providerNames) 
+    ? providerNames 
+    : [];
+
+  if (providerArray.length === 0) {
+    console.warn("No providers found to send email to");
+    return;
+  }
+
+  // Send email to each provider
+  const emailPromises = providerArray.map((providerName) => {
+    const recipientEmail = getProviderEmail(providerName);
+    if (!recipientEmail) {
+      console.warn(`No email address found for provider: ${providerName}`);
+      return Promise.resolve(null);
+    }
+
+    const safeProviderName = providerName ? ` ${providerName}` : "";
+
+    const html = `
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mindset Assessment Report Ready</title>
+    <style>
+      @media only screen and (max-width: 620px) {
+        table.body .btn a {
+          width: 100% !important;
+        }
+      }
+    </style>
+  </head>
+  <body style="background-color: #f6f6f6; font-family: Arial, sans-serif; margin: 0; padding: 0;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f6f6f6; padding: 30px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; padding: 30px;">
+            <tr>
+              <td style="font-size: 16px; color: #1f1f1f; line-height: 1.5;">
+                <p style="margin-top: 0;">Hello${safeProviderName},</p>
+                <p>Your client ${safeAthleteName} has completed the Mindset Assessment for athletes. This assessment is designed to assess their behaviors, thoughts, and feelings related to their wellness and performance as an athlete. It is also an important step on the road to improved mental performance.</p>
+                <p>Please use the link below to download their report. This report will show their scores and how they compare to other athletes at their level.</p>
+                <p style="margin: 30px 0;">
+                  <a href="${reportUrl}" style="background-color: #2c7be5; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 4px; display: inline-block;">Download Report</a>
+                </p>
+                <p>If you have any issues accessing the report, reply to this email and we'll help you out.</p>
+                <p style="margin-bottom: 0;">Thanks,<br/>Premier Sport Psychology</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+    const text = `Hello${safeProviderName},
+
+Your client ${safeAthleteName} has completed the Mindset Assessment for athletes. This assessment is designed to assess their behaviors, thoughts, and feelings related to their wellness and performance as an athlete. It is also an important step on the road to improved mental performance.
+
+Please use the link below to download their report. This report will show their scores and how they compare to other athletes at their level.
+
+Download their report: ${reportUrl}
+
+If you have any issues accessing the report, reply to this email and we'll help you out.
+
+Thanks,
+Premier Sport Psychology`;
+
+    const data = {
+      from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
+      to: recipientEmail,
+      subject: `Mindset Assessment Report for ${safeAthleteName}`,
+      html,
+      text,
+    };
+
+    return new Promise((resolve, reject) => {
+      mailgun.messages().send(data, (error, body) => {
+        if (error) {
+          console.error(`Failed to send email to ${recipientEmail}:`, error);
+          reject(error);
+        } else {
+          console.log(
+            `Email sent to ${recipientEmail} for provider ${providerName}:`,
+            body
+          );
+          resolve(body);
+        }
+      });
+    });
+  });
+
+  return Promise.allSettled(emailPromises);
 };
 
 const sendMindsetAthleteEmail = async ({
@@ -2107,7 +2295,7 @@ app.post("/generate_report_mindset_athlete", async (req, res) => {
   }
 });
 
-app.post("/generate_report_mindset_athlete_adult", (req, res) => {
+app.post("/generate_report_mindset_athlete_adult", async (req, res) => {
   console.log(
     "Webhook listener received for Mindset Athlete Adult Report - request body:"
   );
@@ -2115,6 +2303,124 @@ app.post("/generate_report_mindset_athlete_adult", (req, res) => {
 
   // Send a 200 status code to acknowledge receiving the webhook
   res.status(200).end();
+
+  const body = req.body || {};
+  const responseId = body.responseId || body.ResponseID || `mindset-adult-${Date.now()}`;
+  const surveyId = QUALTRICS_MINDSET_ATHLETE_ADULT_SURVEY_ID;
+
+  try {
+    // Fetch data from Qualtrics using existing function
+    const qualtricsData = await getQualtricsResponse(surveyId, responseId);
+
+    const {
+      athleteName,
+      email,
+      recordedDate,
+      level,
+      age,
+      providerName,
+      language,
+      growthMindsetScore,
+      growthMindsetPercentile,
+      growthMindsetPercentilePro,
+      growthMindsetPercentileCollege,
+      mentalSkillsScore,
+      mentalSkillsPercentile,
+      mentalSkillsPercentilePro,
+      mentalSkillsPercentileCollege,
+      teamSupportScore,
+      teamSupportPercentile,
+      teamSupportPercentilePro,
+      teamSupportPercentileCollege,
+      healthHabitsScore,
+      healthHabitsPercentile,
+      healthHabitsPercentilePro,
+      healthHabitsPercentileCollege,
+      wellnessAccountabilityScore,
+      wellnessAccountabilityPercentile,
+      wellnessAccountabilityPercentilePro,
+      wellnessAccountabilityPercentileCollege,
+    } = qualtricsData;
+
+    // Build URL params according to MindBalanceReportAdult.tsx mapping
+    // Frontend expects: PP for Mental Skills, MP for Wellness Accountability
+    // Data provides: PP for Mental Skills, MP for Wellness Accountability (mapping is correct)
+    const urlParams = {
+      reportOnly: "true",
+      language: (language || "EN").toLowerCase() === "es" || (language || "EN").toLowerCase() === "spanish" ? "es" : "en",
+      athleteName: athleteName || "-",
+      recordedDate: recordedDate || "-",
+      level: level || "-",
+      age: age || "-",
+      providerName: providerName || "-",
+      // Resilient Mindset
+      GrowthScore: growthMindsetScore || "0",
+      GP: growthMindsetPercentile || "0",
+      GMProComparison: growthMindsetPercentilePro || "0",
+      GMColComparison: growthMindsetPercentileCollege || "0",
+      // Mental Skills - frontend expects PP
+      MentalSkills: mentalSkillsScore || "0",
+      PP: mentalSkillsPercentile || "0",
+      MSProComparison: mentalSkillsPercentilePro || "0",
+      MSColComparison: mentalSkillsPercentileCollege || "0",
+      // Team Support
+      Team: teamSupportScore || "0",
+      TP: teamSupportPercentile || "0",
+      TSProComparison: teamSupportPercentilePro || "0",
+      TSColComparison: teamSupportPercentileCollege || "0",
+      // Health Habits
+      HealthHabits: healthHabitsScore || "0",
+      PhP: healthHabitsPercentile || "0",
+      HHProComparison: healthHabitsPercentilePro || "0",
+      HHColComparison: healthHabitsPercentileCollege || "0",
+      // Wellness Accountability - frontend expects MP
+      SelfReflection: wellnessAccountabilityScore || "0",
+      MP: wellnessAccountabilityPercentile || "0",
+      SRProComparison: wellnessAccountabilityPercentilePro || "0",
+      SRColComparison: wellnessAccountabilityPercentileCollege || "0",
+    };
+
+    // Build the frontend URL
+    const frontendUrl = `http://localhost:3000/mindset-adult?${querystring.stringify(urlParams)}`;
+    
+    console.log("Generating PDF for URL:", frontendUrl);
+
+    // Generate PDF and save locally
+    await generatePdfReport(frontendUrl, responseId);
+    
+    console.log(`Successfully generated PDF report for responseId: ${responseId}`);
+
+    // Upload to S3 (this will also delete the local file)
+    const s3ReportUrl = await uploadToS3(surveyId, responseId);
+    console.log(`Successfully uploaded to S3! Presigned URL: ${s3ReportUrl}`);
+
+    // Send emails to all providers
+    await sendMindsetAthleteAdultEmailToProviders({
+      athleteName,
+      providerNames: providerName,
+      reportUrl: s3ReportUrl,
+    });
+
+    console.log(`Successfully sent emails to providers for responseId: ${responseId}`);
+
+    // Post to Slack
+    try {
+      await postToSlack(
+        `*Email with report delivered (Mindset Athlete Adult):*\n\nResponse ID: ${responseId}\nAthlete: ${athleteName}\nProviders: ${providerName}\nReport URL: ${s3ReportUrl}`
+      );
+    } catch (slackError) {
+      console.warn("Failed to post Slack notification:", slackError.message);
+    }
+  } catch (error) {
+    console.error(`Error processing webhook for responseId: ${responseId}`, error);
+    try {
+      await postToSlack(
+        `*Failed to process Mindset Athlete Adult report:*\n\nResponse ID: ${responseId}\nError: ${error.message}`
+      );
+    } catch (slackError) {
+      console.warn("Failed to post Slack notification:", slackError.message);
+    }
+  }
 });
 
 // DELETE endpoint to clean up MindBalance test files from S3
