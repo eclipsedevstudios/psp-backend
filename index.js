@@ -586,21 +586,8 @@ const sendMindsetAthleteAdultEmailToProviders = async ({
     ? providerNames 
     : [];
 
-  if (providerArray.length === 0) {
-    console.warn("No providers found to send email to");
-    return;
-  }
-
-  // Send email to each provider
-  const emailPromises = providerArray.map((providerName) => {
-    const recipientEmail = getProviderEmail(providerName);
-    if (!recipientEmail) {
-      console.warn(`No email address found for provider: ${providerName}`);
-      return Promise.resolve(null);
-    }
-
-    const safeProviderName = providerName ? ` ${providerName}` : "";
-
+  // Create email content template (used for both providers and admin)
+  const createEmailContent = (greetingName = "") => {
     const html = `
 <!doctype html>
 <html>
@@ -623,7 +610,7 @@ const sendMindsetAthleteAdultEmailToProviders = async ({
           <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; padding: 30px;">
             <tr>
               <td style="font-size: 16px; color: #1f1f1f; line-height: 1.5;">
-                <p style="margin-top: 0;">Hello${safeProviderName},</p>
+                <p style="margin-top: 0;">Hello${greetingName},</p>
                 <p>Your client ${safeAthleteName} has completed the Mindset Assessment for athletes. This assessment is designed to assess their behaviors, thoughts, and feelings related to their wellness and performance as an athlete. It is also an important step on the road to improved mental performance.</p>
                 <p>Please use the link below to download their report. This report will show their scores and how they compare to other athletes at their level.</p>
                 <p style="margin: 30px 0;">
@@ -640,7 +627,7 @@ const sendMindsetAthleteAdultEmailToProviders = async ({
   </body>
 </html>`;
 
-    const text = `Hello${safeProviderName},
+    const text = `Hello${greetingName},
 
 Your client ${safeAthleteName} has completed the Mindset Assessment for athletes. This assessment is designed to assess their behaviors, thoughts, and feelings related to their wellness and performance as an athlete. It is also an important step on the road to improved mental performance.
 
@@ -653,15 +640,31 @@ If you have any issues accessing the report, reply to this email and we'll help 
 Thanks,
 Premier Sport Psychology`;
 
-    const data = {
-      from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
-      to: recipientEmail,
-      subject: `Mindset Assessment Report for ${safeAthleteName}`,
-      html,
-      text,
-    };
+    return { html, text };
+  };
 
-    return new Promise((resolve, reject) => {
+  const emailPromises = [];
+
+  // Send email to each provider
+  providerArray.forEach((providerName) => {
+    const recipientEmail = getProviderEmail(providerName);
+    if (!recipientEmail) {
+      console.warn(`No email address found for provider: ${providerName}`);
+      return;
+    }
+
+    const safeProviderName = providerName ? ` ${providerName}` : "";
+    const { html, text } = createEmailContent(safeProviderName);
+
+    const providerEmailPromise = new Promise((resolve, reject) => {
+      const data = {
+        from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
+        to: recipientEmail,
+        subject: `Mindset Assessment Report for ${safeAthleteName}`,
+        html,
+        text,
+      };
+
       mailgun.messages().send(data, (error, body) => {
         if (error) {
           console.error(`Failed to send email to ${recipientEmail}:`, error);
@@ -675,7 +678,33 @@ Premier Sport Psychology`;
         }
       });
     });
+    emailPromises.push(providerEmailPromise);
   });
+
+  // Send email to admin (info@mindbalancesport.com)
+  const ADMIN_EMAIL = "info@mindbalancesport.com";
+  const { html: adminHtml, text: adminText } = createEmailContent(""); // Generic greeting for admin
+
+  const adminEmailPromise = new Promise((resolve, reject) => {
+    const data = {
+      from: "Premier Sport Psychology <mindset@premiersportpsychology.com>",
+      to: ADMIN_EMAIL,
+      subject: `Mindset Assessment Report for ${safeAthleteName}`,
+      html: adminHtml,
+      text: adminText,
+    };
+
+    mailgun.messages().send(data, (error, body) => {
+      if (error) {
+        console.error(`Failed to send email to admin ${ADMIN_EMAIL}:`, error);
+        reject(error);
+      } else {
+        console.log(`Email sent to admin ${ADMIN_EMAIL}:`, body);
+        resolve(body);
+      }
+    });
+  });
+  emailPromises.push(adminEmailPromise);
 
   return Promise.allSettled(emailPromises);
 };
@@ -2381,7 +2410,10 @@ app.post("/generate_report_mindset_athlete_adult", async (req, res) => {
     };
 
     // Build the frontend URL
-    const frontendUrl = `http://localhost:3000/mindset-adult?${querystring.stringify(urlParams)}`;
+    const normalizedBaseUrl = REPORT_BASE_URL.endsWith("/")
+      ? REPORT_BASE_URL.slice(0, -1)
+      : REPORT_BASE_URL;
+    const frontendUrl = `${normalizedBaseUrl}/mindset-adult?${querystring.stringify(urlParams)}`;
     
     console.log("Generating PDF for URL:", frontendUrl);
 
