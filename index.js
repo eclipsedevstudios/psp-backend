@@ -282,7 +282,7 @@ const getQualtricsResponse = async (surveyId, responseId) => {
         const growthMindsetPercentileCollege = data.GMColComparison;
 
         const mentalSkillsScore = data.MentalSkills;
-        const mentalSkillsPercentile = data.PP; // Data has PP for Performance (Mental Skills), frontend expects PP
+        const mentalSkillsPercentile = data.MP; // Data has MP for Performance (Mental Skills), frontend expects MP
         const mentalSkillsPercentilePro = data.MSProComparison;
         const mentalSkillsPercentileCollege = data.MSColComparison;
 
@@ -297,7 +297,7 @@ const getQualtricsResponse = async (surveyId, responseId) => {
         const healthHabitsPercentileCollege = data.HHColComparison;
 
         const wellnessAccountabilityScore = data.SelfReflection;
-        const wellnessAccountabilityPercentile = data.MP; // Data has MP for Mental (Wellness Accountability), frontend expects MP
+        const wellnessAccountabilityPercentile = data.PP; // Data has PP for Wellness Accountability, frontend expects PP
         const wellnessAccountabilityPercentilePro = data.SRProComparison;
         const wellnessAccountabilityPercentileCollege = data.SRColComparison;
 
@@ -2372,8 +2372,9 @@ app.post("/generate_report_mindset_athlete_adult", async (req, res) => {
     } = qualtricsData;
 
     // Build URL params according to MindBalanceReportAdult.tsx mapping
-    // Frontend expects: PP for Mental Skills, MP for Wellness Accountability
-    // Data provides: PP for Mental Skills, MP for Wellness Accountability (mapping is correct)
+    // Frontend expects: MP for Mental Skills, PP for Wellness Accountability
+    // Data provides: PP for Mental Skills (Performance), MP for Mental (Wellness Accountability)
+    // Mapping: data.PP -> MP (Mental Skills), data.MP -> PP (Wellness Accountability)
     const urlParams = {
       reportOnly: "true",
       language: (language || "EN").toLowerCase() === "es" || (language || "EN").toLowerCase() === "spanish" ? "es" : "en",
