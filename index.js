@@ -2373,8 +2373,8 @@ app.post("/generate_report_mindset_athlete_adult", async (req, res) => {
 
     // Build URL params according to MindBalanceReportAdult.tsx mapping
     // Frontend expects: MP for Mental Skills, PP for Wellness Accountability
-    // Data provides: PP for Mental Skills (Performance), MP for Mental (Wellness Accountability)
-    // Mapping: data.PP -> MP (Mental Skills), data.MP -> PP (Wellness Accountability)
+    // Data provides: MP for Mental Skills, PP for Wellness Accountability
+    // Mapping: data.MP -> MP (Mental Skills), data.PP -> PP (Wellness Accountability)
     const urlParams = {
       reportOnly: "true",
       language: (language || "EN").toLowerCase() === "es" || (language || "EN").toLowerCase() === "spanish" ? "es" : "en",
@@ -2388,9 +2388,9 @@ app.post("/generate_report_mindset_athlete_adult", async (req, res) => {
       GP: growthMindsetPercentile || "0",
       GMProComparison: growthMindsetPercentilePro || "0",
       GMColComparison: growthMindsetPercentileCollege || "0",
-      // Mental Skills - frontend expects PP
+      // Mental Skills - frontend expects MP, data provides MP
       MentalSkills: mentalSkillsScore || "0",
-      PP: mentalSkillsPercentile || "0",
+      MP: mentalSkillsPercentile || "0",
       MSProComparison: mentalSkillsPercentilePro || "0",
       MSColComparison: mentalSkillsPercentileCollege || "0",
       // Team Support
@@ -2403,9 +2403,9 @@ app.post("/generate_report_mindset_athlete_adult", async (req, res) => {
       PhP: healthHabitsPercentile || "0",
       HHProComparison: healthHabitsPercentilePro || "0",
       HHColComparison: healthHabitsPercentileCollege || "0",
-      // Wellness Accountability - frontend expects MP
+      // Wellness Accountability - frontend expects PP, data provides PP
       SelfReflection: wellnessAccountabilityScore || "0",
-      MP: wellnessAccountabilityPercentile || "0",
+      PP: wellnessAccountabilityPercentile || "0",
       SRProComparison: wellnessAccountabilityPercentilePro || "0",
       SRColComparison: wellnessAccountabilityPercentileCollege || "0",
     };
