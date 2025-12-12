@@ -100,7 +100,7 @@ const getQualtricsResponse = async (surveyId, responseId) => {
   const qualtricsData = await axios
     .get(url, {
       headers: {
-        "X-API-TOKEN": process.env.QUALTRICS_API_TOKEN,
+        "X-API-TOKEN":surveyId === QUALTRICS_MINDSET_ATHLETE_ADULT_SURVEY_ID ? process.env.QUALTRICS_API_TOKEN_TWO : process.env.QUALTRICS_API_TOKEN,
       },
     })
     .then((res) => {
