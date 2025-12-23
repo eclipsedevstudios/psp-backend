@@ -409,6 +409,29 @@ const waitForImagesToLoad = async (page) => {
   }
 };
 
+// Helper function to wait for fonts to load
+const waitForFontsToLoad = async (page) => {
+  console.log("Waiting for fonts to load...");
+
+  try {
+    // Wait for fonts to be ready using document.fonts.ready
+    await page.evaluate(async () => {
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+        console.log("All fonts loaded");
+      } else {
+        console.log("document.fonts not available");
+      }
+    });
+
+    console.log("Fonts loaded and ready");
+  } catch (error) {
+    console.warn("Font loading check failed, using fallback delay:", error.message);
+    // Fallback: wait a bit longer for fonts to load
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+};
+
 const generatePdfReport = async (reportUrl, responseId) => {
   console.log(`Beginning PDF generation of the url: ${reportUrl}`);
 
@@ -420,8 +443,15 @@ const generatePdfReport = async (reportUrl, responseId) => {
   // Wait for images to load completely before generating PDF
   await waitForImagesToLoad(page);
 
+  // Wait for fonts to load and be applied
+  await waitForFontsToLoad(page);
+
   // Additional wait for any dynamic content
   await page.waitForLoadState("networkidle", { timeout: 10000 });
+
+  // Additional delay to ensure fonts are fully applied to the rendered content
+  console.log("Waiting additional time for fonts to be applied...");
+  await new Promise((resolve) => setTimeout(resolve, 2000));
 
   await page.pdf({
     path: `output/psp-mindset-assessment-report-${responseId}.pdf`,
